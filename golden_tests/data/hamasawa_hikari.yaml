@@ -1,0 +1,30 @@
+name: 濱澤ひかり
+gender: female
+birth_date: "1996-12-24"
+birth_time: "05:46"
+birth_place: 福岡県（市区町村不明・要確認、本人記載に基づく仮設定）
+source: "ユーザー記憶による候補値（元サイトのスクリーンショット未取得）"
+confirmed_on: "2026-07-16"
+status: unverified
+
+expected_year_pillar: null
+expected_month_pillar: null
+expected_day_pillar: null
+expected_hour_pillar: null
+expected_day_master: 乙   # ユーザー記憶による候補値
+expected_five_elements: null
+expected_center_star: 龍高星   # ユーザー記憶による候補値
+expected_juudai_shusei: {}
+expected_juuni_daijuusei: {}
+expected_tenchuusatsu: []
+expected_major_luck_start: null
+expected_major_cycles: []
+
+notes: |
+  現行エンジンの計算結果（参考、正解ではない）:
+    年柱=丙子 月柱=庚子 日柱=乙未(日柱起点は未検証プレースホルダー) 時柱=己卯
+    日干=乙(木)（ユーザー記憶の候補値と一致） 中心星=龍高星（ユーザー記憶の候補値と一致）
+    天中殺=辰巳 大運=逆行 開始年齢=5.68歳
+  日干・中心星ともに候補値と一致したのは良い兆候だが、元サイトのスクリーンショット等
+  による正式な確認が完了するまでは verified に変更しないこと。
+  出生地の市区町村が未確認。
