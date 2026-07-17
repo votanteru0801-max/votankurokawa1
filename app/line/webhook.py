@@ -66,9 +66,7 @@ def process_event(event: dict) -> None:
 
         try:
             if not is_allowed_user(line_user_id):
-                # 一時措置: 管理者がユーザーIDを確認できるよう、未許可時の返信にIDを含める。
-                # ALLOWED_LINE_USER_ID設定後は元のUNAUTHORIZED_MESSAGEのみに戻すこと。
-                _reply_or_log(line_user_id, [f"{UNAUTHORIZED_MESSAGE}\nあなたのID: {line_user_id}"])
+                _reply_or_log(line_user_id, [UNAUTHORIZED_MESSAGE])
                 db_event.status = "done"
                 db_event.processed_at = datetime.utcnow()
                 db.add(db_event)
