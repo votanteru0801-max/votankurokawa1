@@ -92,8 +92,14 @@ def process_event(event: dict) -> None:
             db.add(db_event)
             db.commit()
         except Exception as e:  # noqa: BLE001 内部エラーはユーザーに詳細を見せない
+            import traceback
+
             from app.services.audit_service import log_error
             from app.sheets.google_repository import SheetsWriteNotSupportedError
+
+            # 一時的な調査用: Renderのログ画面でも原因を追えるよう標準出力にも出す。
+            print(f"[ERROR] webhook processing failed: {type(e).__name__}: {e}")
+            traceback.print_exc()
 
             # 直前の例外でセッションが「ロールバック待ち」状態になっている場合があるため、
             # エラー記録の前に必ずロールバックしてセッションを使える状態に戻す。
