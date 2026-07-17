@@ -37,8 +37,14 @@ class Settings(BaseSettings):
     line_channel_access_token: str = ""
 
     anthropic_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-4-6"
+    anthropic_model: str = "claude-sonnet-5"
     anthropic_max_tool_retries: int = 2
+
+    # AIプロバイダの選択。"mock"(既定) / "anthropic"(有料) / "gemini"(無料枠あり)。
+    # anthropic_modeがliveの場合は後方互換のためanthropicとして扱う。
+    ai_provider: str = "mock"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
 
     google_application_credentials: str = ""
     # Secret Files機能が使えない環境向け: サービスアカウントJSONの中身をそのまま
