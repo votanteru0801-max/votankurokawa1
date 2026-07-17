@@ -83,7 +83,9 @@ class GroqAIClient:
                 ],
                 tools=[tool],
                 tool_choice={"type": "function", "function": {"name": "submit_analysis"}},
-                max_tokens=8192,
+                # 無料枠のTPM(1分あたりトークン数)上限が低いモデルのため、
+                # 入力+出力の合計が収まるよう控えめな値にしている。
+                max_tokens=3500,
             )
             message = response.choices[0].message
             tool_calls = getattr(message, "tool_calls", None)
