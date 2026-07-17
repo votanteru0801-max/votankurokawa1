@@ -245,7 +245,6 @@ class GoogleSheetsPersonRepository:
                         )
                     )
                     data_row += 1
-        print(f"[SHEETS_DEBUG] parsed {len(people)} people; sample={[p.name for p in people[:5]]}")
         return people
 
     def search_people(self, query: PersonSearchQuery) -> list[Person]:
