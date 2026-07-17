@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     anthropic_max_tool_retries: int = 2
 
     google_application_credentials: str = ""
+    # Secret Files機能が使えない環境向け: サービスアカウントJSONの中身をそのまま
+    # 環境変数として渡す場合はこちらを使う（設定されていればファイルパスより優先）。
+    google_service_account_json: str = ""
     hr_spreadsheet_id: str = "14Qz4S4s3CGOrjFsijOvjXy542BkG3DJ3gLYzZFAXWvg"
 
     database_url: str = "postgresql+psycopg://kuroeda:kuroeda@db:5432/kuroeda"

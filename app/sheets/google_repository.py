@@ -93,14 +93,21 @@ class GoogleSheetsPersonRepository:
 
     def _get_service(self):
         if self._service is None:
+            import json
+
             from google.oauth2 import service_account
             from googleapiclient.discovery import build
 
             settings = get_settings()
-            credentials = service_account.Credentials.from_service_account_file(
-                settings.google_application_credentials,
-                scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"],
-            )
+            scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+            if settings.google_service_account_json:
+                # Secret Files機能を使わず、環境変数にJSONの中身を直接入れている場合。
+                info = json.loads(settings.google_service_account_json)
+                credentials = service_account.Credentials.from_service_account_info(info, scopes=scopes)
+            else:
+                credentials = service_account.Credentials.from_service_account_file(
+                    settings.google_application_credentials, scopes=scopes,
+                )
             self._service = build("sheets", "v4", credentials=credentials)
         return self._service
 
