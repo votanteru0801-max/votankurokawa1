@@ -146,6 +146,11 @@ class GoogleSheetsPersonRepository:
         grid = self._fetch_grid()
         people: list[Person] = []
         n_rows = len(grid)
+        print(f"[SHEETS_DEBUG] fetched grid: {n_rows} rows; row0 len={len(grid[0]) if grid else 0}")
+        if n_rows >= 4:
+            print(f"[SHEETS_DEBUG] row1={grid[1][:6] if len(grid) > 1 else None}")
+            print(f"[SHEETS_DEBUG] row2={grid[2][:6] if len(grid) > 2 else None}")
+            print(f"[SHEETS_DEBUG] row3={grid[3][:6] if len(grid) > 3 else None}")
         for r in range(n_rows):
             line = grid[r]
             for c in range(len(line)):
@@ -188,6 +193,7 @@ class GoogleSheetsPersonRepository:
                         )
                     )
                     data_row += 1
+        print(f"[SHEETS_DEBUG] parsed {len(people)} people; sample={[p.name for p in people[:5]]}")
         return people
 
     def search_people(self, query: PersonSearchQuery) -> list[Person]:
