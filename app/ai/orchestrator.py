@@ -496,7 +496,14 @@ class Orchestrator:
             "get_relevant_hr_context", {"person_id": str(person.person_id), "purpose": purpose.value}, ctx
         )
 
-        accuracy_notes = list(four_pillars.get("hour_pillar_omitted_reason") and [four_pillars["hour_pillar_omitted_reason"]] or [])
+        # 出生時間・性別未登録などの精度上の注意は、決定論的な計算結果から確定させる
+        # （AIの自由記述に判断させると、無料/軽量モデルでは実際のデータを見ずに
+        # プロンプト中の一般的な注意書きをそのまま繰り返してしまうことがあるため）。
+        accuracy_notes: list[str] = []
+        if four_pillars.get("hour_pillar_omitted_reason"):
+            accuracy_notes.append(four_pillars["hour_pillar_omitted_reason"])
+        if luck.get("unavailable_reason"):
+            accuracy_notes.append(luck["unavailable_reason"])
 
         try:
             resp = self.ai_client.generate_analysis(
@@ -504,6 +511,10 @@ class Orchestrator:
             )
         except AnalysisGenerationError:
             return ["AI分析の生成に失敗しました。時間をおいて再度お試しください。"]
+
+        # AIが生成したaccuracy_notesは信頼せず、上で確定させた決定論的な注意事項で
+        # 必ず上書きする（要件1: 占術データはツールの結果のみを根拠とする）。
+        resp.accuracy_notes = accuracy_notes
 
         settings = get_settings()
         audit_service.log_ai_request(

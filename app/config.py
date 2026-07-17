@@ -47,7 +47,8 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
+    # llama-3.3-70b-versatileは廃止予定のため、後継の推奨モデルを既定にする。
+    groq_model: str = "openai/gpt-oss-120b"
 
     google_application_credentials: str = ""
     # Secret Files機能が使えない環境向け: サービスアカウントJSONの中身をそのまま

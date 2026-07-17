@@ -47,6 +47,10 @@ class GeminiAIClient:
         accuracy_notes: list[str],
     ):
         schema_cls = DetailedAnalysisResponse if mode == "detailed" else SimpleAnalysisResponse
+        accuracy_line = (
+            "この人物について精度上の制限事項は次の" + str(len(accuracy_notes)) + "件のみです: "
+            + ("; ".join(accuracy_notes) if accuracy_notes else "なし（出生時間・性別とも登録済みのため、時柱や大運の方向も算出済みです）")
+        )
         user_content = (
             f"対象人物: {person_name}（person_id: {person_id}）\n"
             f"石橋輝一からの質問: {question}\n\n"
@@ -58,7 +62,9 @@ class GeminiAIClient:
             + wrap_as_data_not_instruction(
                 "人事情報(質問目的に応じて最小化済み)", json.dumps(hr_context, ensure_ascii=False, default=str)
             )
-            + f"\n\n精度に関する注意事項: {accuracy_notes}\n"
+            + f"\n\n{accuracy_line}\n"
+            "重要: 上記の制限事項リストに無い内容（例:「出生時間が未登録」等）を、"
+            "回答本文に書かないでください。リストに無ければ、その項目は登録済み・算出済みです。\n"
             "指定されたJSONスキーマの形式で回答してください。"
         )
         client = self._get_client()
