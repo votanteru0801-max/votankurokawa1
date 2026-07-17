@@ -83,7 +83,7 @@ class GroqAIClient:
                 ],
                 tools=[tool],
                 tool_choice={"type": "function", "function": {"name": "submit_analysis"}},
-                max_tokens=4096,
+                max_tokens=8192,
             )
             message = response.choices[0].message
             tool_calls = getattr(message, "tool_calls", None)
@@ -91,7 +91,13 @@ class GroqAIClient:
                 last_error = AnalysisGenerationError("AIがツールを呼び出しませんでした。")
                 continue
             try:
-                args = json.loads(tool_calls[0].function.arguments)
+                raw_args = tool_calls[0].function.arguments
+                try:
+                    args = json.loads(raw_args)
+                except json.JSONDecodeError:
+                    # 一部のモデルは有効なJSONの後に余分な文字列を付け足すことがあるため、
+                    # 先頭から読める分だけを取り出して救済を試みる。
+                    args, _ = json.JSONDecoder().raw_decode(raw_args)
                 return schema_cls(**args)
             except Exception as e:  # JSON解析エラー・pydantic ValidationError等
                 last_error = e
