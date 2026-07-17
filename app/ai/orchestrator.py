@@ -91,10 +91,17 @@ def _detect_analysis_mode(text: str) -> str | None:
     return None
 
 
+def _norm_for_match(s: str) -> str:
+    """氏名照合用の正規化。全角・半角スペースの有無による表記揺れ
+    （例:「濱澤ひかり」/「濱澤 ひかり」）を吸収する。"""
+    return (s or "").replace("　", "").replace(" ", "")
+
+
 def _extract_person_name(repo: PersonRepository, text: str) -> str | None:
     names = sorted((p.name for p in repo.list_all()), key=len, reverse=True)
+    norm_text = _norm_for_match(text)
     for name in names:
-        if name and name in text:
+        if name and _norm_for_match(name) in norm_text:
             return name
     return None
 
