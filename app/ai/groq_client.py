@@ -69,24 +69,33 @@ class GroqAIClient:
             )
             + f"\n\n{accuracy_line}\n"
             "重要: 上記の制限事項リストに無い内容（例:「出生時間が未登録」等）を、"
-            "回答本文に書かないでください。リストに無ければ、その項目は登録済み・算出済みです。\n"
+            "回答本文に書かないでください。リストに無ければ、その項目は登録済み・算出済みです。\n\n"
+            "重要（出力形式）: strengths/cautions/current_approach 等の各要素は、"
+            "必ず {\"label\": ..., \"text\": ...} の2つのキーだけを持つオブジェクトにしてください。"
+            "\"point\"のような別名のキーは使わないでください。"
+            "labelには次の5つの文字列のうちいずれか1つだけを正確にそのまま使ってください: "
+            "\"登録されている事実\", \"命式上の傾向\", \"AIによる人事仮説\", \"確認したいこと\", \"提案\"。\n"
             "submit_analysisツールを使って回答を構造化して提出してください。"
         )
         client = self._get_client()
         last_error: Exception | None = None
         for _ in range(self._max_retries + 1):
-            response = client.chat.completions.create(
-                model=self._model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_content},
-                ],
-                tools=[tool],
-                tool_choice={"type": "function", "function": {"name": "submit_analysis"}},
-                # 無料枠のTPM(1分あたりトークン数)上限が低いモデルのため、
-                # 入力+出力の合計が収まるよう控えめな値にしている。
-                max_tokens=3500,
-            )
+            try:
+                response = client.chat.completions.create(
+                    model=self._model,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_content},
+                    ],
+                    tools=[tool],
+                    tool_choice={"type": "function", "function": {"name": "submit_analysis"}},
+                    # 無料枠のTPM(1分あたりトークン数)上限が低いモデルのため、
+                    # 入力+出力の合計が収まるよう控えめな値にしている。
+                    max_tokens=3500,
+                )
+            except Exception as e:  # Groq側のツール呼び出し検証エラー(400)等もここで捕捉して再試行する
+                last_error = e
+                continue
             message = response.choices[0].message
             tool_calls = getattr(message, "tool_calls", None)
             if not tool_calls:
