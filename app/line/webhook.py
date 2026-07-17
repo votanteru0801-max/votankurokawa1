@@ -93,6 +93,7 @@ def process_event(event: dict) -> None:
             db.commit()
         except Exception as e:  # noqa: BLE001 内部エラーはユーザーに詳細を見せない
             from app.services.audit_service import log_error
+            from app.sheets.google_repository import SheetsWriteNotSupportedError
 
             # 直前の例外でセッションが「ロールバック待ち」状態になっている場合があるため、
             # エラー記録の前に必ずロールバックしてセッションを使える状態に戻す。
@@ -102,10 +103,11 @@ def process_event(event: dict) -> None:
             db_event.error_message = str(e)
             db.add(db_event)
             db.commit()
-            _reply_or_log(
-                line_user_id,
-                ["処理中にエラーが発生しました。時間をおいて再度お試しください。"],
-            )
+            if isinstance(e, SheetsWriteNotSupportedError):
+                user_message = str(e)
+            else:
+                user_message = "処理中にエラーが発生しました。時間をおいて再度お試しください。"
+            _reply_or_log(line_user_id, [user_message])
 
 
 @router.post("/webhook")
