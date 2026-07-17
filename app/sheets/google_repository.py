@@ -40,6 +40,12 @@ class SheetsWriteNotSupportedError(Exception):
     """現在のシート構成では書き込み系操作に対応していないことを表す。"""
 
 
+def _norm_name(s: str) -> str:
+    """氏名比較用の正規化。全角・半角スペースの有無による表記揺れ
+    （例:「濱澤ひかり」/「濱澤 ひかり」）を吸収する。"""
+    return (s or "").replace("　", "").replace(" ", "").strip()
+
+
 def _make_person_id(department: str, name: str, birth_date_raw: str) -> UUID:
     key = f"{department}|{name}|{birth_date_raw}"
     return uuid.uuid5(_PERSON_ID_NAMESPACE, key)
@@ -188,7 +194,8 @@ class GoogleSheetsPersonRepository:
         people = self._parse_all()
         results = people
         if query.name_query:
-            results = [p for p in results if query.name_query in p.name]
+            q = _norm_name(query.name_query)
+            results = [p for p in results if q in _norm_name(p.name)]
         if query.department:
             results = [p for p in results if query.department in p.department]
         if query.category:
@@ -202,8 +209,8 @@ class GoogleSheetsPersonRepository:
         return None
 
     def find_by_name(self, name: str) -> list[Person]:
-        name = name.strip()
-        return [p for p in self._parse_all() if p.name == name or name in p.name]
+        target = _norm_name(name)
+        return [p for p in self._parse_all() if _norm_name(p.name) == target or target in _norm_name(p.name)]
 
     def list_all(self) -> list[Person]:
         return self._parse_all()
