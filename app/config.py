@@ -40,11 +40,14 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-sonnet-5"
     anthropic_max_tool_retries: int = 2
 
-    # AIプロバイダの選択。"mock"(既定) / "anthropic"(有料) / "gemini"(無料枠あり)。
+    # AIプロバイダの選択。"mock"(既定) / "anthropic"(有料) / "gemini"(無料枠あり) /
+    # "groq"(無料・学習不使用が利用規約に明記)。
     # anthropic_modeがliveの場合は後方互換のためanthropicとして扱う。
     ai_provider: str = "mock"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
 
     google_application_credentials: str = ""
     # Secret Files機能が使えない環境向け: サービスアカウントJSONの中身をそのまま

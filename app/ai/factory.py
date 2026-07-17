@@ -19,6 +19,10 @@ def get_ai_client():
         from app.ai.gemini_client import GeminiAIClient
 
         return GeminiAIClient()
+    if provider == "groq":
+        from app.ai.groq_client import GroqAIClient
+
+        return GroqAIClient()
     from app.ai.mock_client import MockAIClient
 
     return MockAIClient()
