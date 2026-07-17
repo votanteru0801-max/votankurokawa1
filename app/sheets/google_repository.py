@@ -2,14 +2,19 @@
 
 実シート構成の調査結果（2026-07-17確認）:
 実際のスプレッドシート（タブ名「生年月日」）は、1行1人の単一テーブルではなく、
-店舗・チームごとに「名前 / 生年月日 / 時間 / 場所 / MBTI」という5列のブロックが
-シート内に複数（横にも縦にも）並んでいる手作業運用のレイアウトだった。
+店舗・チームごとに「名前」を先頭列とする小さな表がシート内に複数（横にも縦にも）
+並んでいる手作業運用のレイアウトだった。列の並びはブロックごとに微妙に異なり
+（例: 一部のブロックだけ「名前」と「生年月日」の間に非表示の「性別」列が
+挿入されている）、固定の列位置では正しく読み取れないことが判明した。
 person_id・人物区分・部署コード・面談記録・評価などの列は存在しない。
 
 このため、当面は以下の方針で実装する（ユーザー確認済み・2026-07-17）:
 - 既存の「生年月日」タブは一切変更しない（列追加・並び替えをしない）。
-- 読み取り専用でこのタブを解析し、各ブロックのタイトル（ブロック開始行の直上に
-  ある空でないセル）を department（所属店舗）として扱う。
+- 「名前」というセルを見出し行の起点として検出し、そこから右方向に隣接する
+  セルを見出し名（性別/生年月日/時間/場所/MBTI等）として読み取り、ブロックごとに
+  列の並びを個別に判定する（固定オフセットに依存しない）。
+- 各ブロックのタイトル（ブロック開始行の直上にある空でないセル）を
+  department（所属店舗）として扱う。
 - 人物区分（category）は全員 employee とみなす（シート上に区別する情報がないため）。
 - person_id はシート上に存在しないため、department・name・生年月日文字列から
   決定論的に生成する（uuid5）。同じ人物なら常に同じIDになるが、店舗異動や
@@ -29,11 +34,38 @@ from app.config import get_settings
 from app.schemas.person import Gender, Person, PersonCategory, PersonSearchQuery, RetentionInfo
 
 BIRTHDAY_SHEET_NAME = "生年月日"
-BLOCK_HEADER = ["名前", "生年月日", "時間", "場所", "MBTI"]
+
+# 見出しセルの文字列 -> 内部フィールド名。ここに無い見出し列は無視する。
+HEADER_ALIASES: dict[str, str] = {
+    "名前": "name",
+    "氏名": "name",
+    "性別": "gender",
+    "生年月日": "birth_date",
+    "時間": "time",
+    "出生時間": "time",
+    "場所": "place",
+    "出生地": "place",
+    "MBTI": "mbti",
+}
+# ヘッダー行を右方向にスキャンする際、この個数まで空セルが続いたら
+# ブロックの見出しが終わったとみなす（列の間にちょっとした空白列があっても
+# 誤って別ブロックと混ざらないようにするため、1で十分＝空セル1つで終了）。
+_HEADER_SCAN_MAX_COLS = 8
 
 # person_idを決定論的に生成するための固定名前空間（変更しないこと。変更すると
 # 既存の全人物IDが変わってしまう）。
 _PERSON_ID_NAMESPACE = uuid.UUID("2f6a9e2a-2f0e-4c7b-9d1a-6f7c1b4e9a11")
+
+
+def _parse_gender(raw: str) -> Gender:
+    raw = (raw or "").strip()
+    if raw in ("男", "男性", "M", "m"):
+        return Gender.MALE
+    if raw in ("女", "女性", "F", "f"):
+        return Gender.FEMALE
+    if not raw:
+        return Gender.UNKNOWN
+    return Gender.OTHER
 
 
 class SheetsWriteNotSupportedError(Exception):
@@ -136,41 +168,61 @@ class GoogleSheetsPersonRepository:
                 continue
             line = grid[r]
             cell = line[col].strip() if col < len(line) else ""
-            if cell in BLOCK_HEADER:
+            if cell in HEADER_ALIASES:
                 break
             if cell:
                 return cell
         return "不明"
 
+    def _read_header_map(self, line: list[str], name_col: int) -> dict[str, int]:
+        """name_col（「名前」セル）を起点に右方向へスキャンし、
+        {フィールド名: 列インデックス} の対応表を作る。未知の見出しは無視して
+        読み飛ばすが、空セルに達したらそこでスキャンを打ち切る。
+        """
+        field_to_col: dict[str, int] = {"name": name_col}
+        c = name_col + 1
+        while c < min(len(line), name_col + _HEADER_SCAN_MAX_COLS):
+            cell = line[c].strip()
+            if not cell:
+                break
+            field = HEADER_ALIASES.get(cell)
+            if field and field not in field_to_col:
+                field_to_col[field] = c
+            c += 1
+        return field_to_col
+
     def _parse_all(self) -> list[Person]:
         grid = self._fetch_grid()
         people: list[Person] = []
         n_rows = len(grid)
-        print(f"[SHEETS_DEBUG] fetched grid: {n_rows} rows; row0 len={len(grid[0]) if grid else 0}")
-        if n_rows >= 4:
-            print(f"[SHEETS_DEBUG] row1={grid[1][:6] if len(grid) > 1 else None}")
-            print(f"[SHEETS_DEBUG] row2={grid[2][:6] if len(grid) > 2 else None}")
-            print(f"[SHEETS_DEBUG] row3={grid[3][:6] if len(grid) > 3 else None}")
         for r in range(n_rows):
             line = grid[r]
             for c in range(len(line)):
-                window = [
-                    (line[c + i].strip() if c + i < len(line) else "")
-                    for i in range(5)
-                ]
-                if window != BLOCK_HEADER:
+                if line[c].strip() != "名前":
+                    continue
+                header_map = self._read_header_map(line, c)
+                if "birth_date" not in header_map:
+                    # 「名前」だけの単発セル（見出しではない）を誤検出した場合は無視する。
                     continue
                 department = self._department_label(grid, r, c)
+
+                def cell_at(row_cells: list[str], field: str) -> str:
+                    col = header_map.get(field)
+                    if col is None or col >= len(row_cells):
+                        return ""
+                    return row_cells[col].strip()
+
                 data_row = r + 1
                 while data_row < n_rows:
                     row_cells = grid[data_row]
-                    name = (row_cells[c].strip() if c < len(row_cells) else "")
+                    name = cell_at(row_cells, "name")
                     if not name:
                         break
-                    birth_raw = row_cells[c + 1].strip() if c + 1 < len(row_cells) else ""
-                    time_raw = row_cells[c + 2].strip() if c + 2 < len(row_cells) else ""
-                    place_raw = row_cells[c + 3].strip() if c + 3 < len(row_cells) else ""
-                    mbti_raw = row_cells[c + 4].strip() if c + 4 < len(row_cells) else ""
+                    birth_raw = cell_at(row_cells, "birth_date")
+                    time_raw = cell_at(row_cells, "time")
+                    place_raw = cell_at(row_cells, "place")
+                    mbti_raw = cell_at(row_cells, "mbti")
+                    gender_raw = cell_at(row_cells, "gender")
 
                     birth_date = _parse_birth_date(birth_raw)
                     birth_time, birth_time_unknown = _parse_birth_time(time_raw)
@@ -180,7 +232,7 @@ class GoogleSheetsPersonRepository:
                             person_id=_make_person_id(department, name, birth_raw),
                             name=name,
                             category=PersonCategory.EMPLOYEE,
-                            gender=Gender.UNKNOWN,
+                            gender=_parse_gender(gender_raw),
                             birth_date=birth_date,
                             birth_time=birth_time,
                             birth_time_unknown=birth_time_unknown,
