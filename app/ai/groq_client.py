@@ -65,11 +65,13 @@ class GroqAIClient:
                 )
             except Exception as e:  # Groq側のツール呼び出し検証エラー(400)等もここで捕捉して再試行する
                 last_error = e
+                print(f"[AI_DEBUG] {tool_name}: API呼び出しエラー: {e!r}")
                 continue
             message = response.choices[0].message
             tool_calls = getattr(message, "tool_calls", None)
             if not tool_calls:
                 last_error = AnalysisGenerationError("AIがツールを呼び出しませんでした。")
+                print(f"[AI_DEBUG] {tool_name}: ツール未呼び出し。content={message.content!r}")
                 continue
             try:
                 raw_args = tool_calls[0].function.arguments
@@ -82,7 +84,9 @@ class GroqAIClient:
                 return schema_cls(**args)
             except Exception as e:  # JSON解析エラー・pydantic ValidationError等
                 last_error = e
+                print(f"[AI_DEBUG] {tool_name}: 解析/検証エラー: {e!r} raw_args={raw_args!r}")
                 continue
+        print(f"[AI_DEBUG] {tool_name}: 全リトライ失敗。last_error={last_error!r}")
         raise AnalysisGenerationError(f"構造化出力の検証に失敗しました: {last_error}")
 
     def generate_analysis(
