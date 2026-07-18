@@ -157,7 +157,25 @@ class GoogleSheetsPersonRepository:
             .get(spreadsheetId=self.spreadsheet_id, range=f"{BIRTHDAY_SHEET_NAME}!A1:BZ500")
             .execute()
         )
-        return result.get("values", [])
+        grid = result.get("values", [])
+        # 調査用: B4セル（濱澤ひかりの性別のはず）を単独取得して、一括取得との差を確認する。
+        try:
+            single = (
+                service.spreadsheets()
+                .values()
+                .get(
+                    spreadsheetId=self.spreadsheet_id,
+                    range=f"{BIRTHDAY_SHEET_NAME}!A1:F5",
+                    valueRenderOption="UNFORMATTED_VALUE",
+                )
+                .execute()
+            )
+            print(f"[SHEETS_DEBUG] direct A1:F5 unformatted = {single.get('values', [])}")
+        except Exception as e:
+            print(f"[SHEETS_DEBUG] direct fetch failed: {e}")
+        if len(grid) > 3:
+            print(f"[SHEETS_DEBUG] grid row index3 (spreadsheet row4) raw = {grid[3][:6]!r}")
+        return grid
 
     def _department_label(self, grid: list[list[str]], row: int, col: int) -> str:
         # ヘッダー行(row)の直上から数行、同じ列を上向きに探索し、最初に見つかった
