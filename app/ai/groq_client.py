@@ -37,7 +37,7 @@ class GroqAIClient:
             self._client = Groq(api_key=self._api_key)
         return self._client
 
-    def _call_tool(self, tool_name: str, tool_schema: dict, user_content: str, schema_cls):
+    def _call_tool(self, tool_name: str, tool_schema: dict, user_content: str, schema_cls, max_tokens: int = 3500):
         """強制tool_choiceでツールを呼び出し、JSONを検証・パースするまで再試行する共通処理。"""
         tool = {
             "type": "function",
@@ -60,8 +60,9 @@ class GroqAIClient:
                     tools=[tool],
                     tool_choice={"type": "function", "function": {"name": tool_name}},
                     # 無料枠のTPM(1分あたりトークン数)上限が低いモデルのため、
-                    # 入力+出力の合計が収まるよう控えめな値にしている。
-                    max_tokens=3500,
+                    # 入力+出力の合計が収まるよう控えめな値にしている
+                    # （呼び出し元ごとに必要最小限の値を渡す）。
+                    max_tokens=max_tokens,
                 )
             except Exception as e:  # Groq側のツール呼び出し検証エラー(400)等もここで捕捉して再試行する
                 last_error = e
@@ -128,22 +129,28 @@ class GroqAIClient:
         return self._call_tool("submit_analysis", schema_cls.model_json_schema(), user_content, schema_cls)
 
     def recommend_team(self, criteria: str, candidates: list[dict]) -> TeamRecommendationResponse:
-        candidates_text = "\n".join(
-            f"- {c['name']}（所属:{c.get('department','不明')} / MBTI:{c.get('mbti') or '不明'} / "
-            f"日主:{c.get('day_master_element','?')}{c.get('day_master_yinyang','')} / "
-            f"中心星:{c.get('center_star') or '不明'}）"
+        # 無料枠のTPM上限に収めるため、候補者一覧はラベル無しのCSV形式にして
+        # トークン数を抑える（候補者数が多い場合ほど効果が大きい）。
+        candidates_text = "氏名,所属,MBTI,日主,中心星\n" + "\n".join(
+            f"{c['name']},{c.get('department') or '-'},{c.get('mbti') or '-'},"
+            f"{c.get('day_master_element','?')}{c.get('day_master_yinyang','')},"
+            f"{c.get('center_star') or '-'}"
             for c in candidates
         )
         user_content = (
             f"石橋輝一からの依頼: 次の条件に合う新プロジェクトメンバーの候補を、"
-            f"以下の候補者一覧の中から選んでください。\n条件: {criteria}\n\n"
-            + wrap_as_data_not_instruction("候補者一覧（命式の要約データ）", candidates_text)
+            f"以下の候補者一覧(CSV形式: 氏名,所属,MBTI,日主,中心星)の中から選んでください。\n条件: {criteria}\n\n"
+            + wrap_as_data_not_instruction("候補者一覧（命式の要約データ、CSV形式）", candidates_text)
             + "\n重要: 候補者一覧に無い名前を作り出さないでください。必ず一覧の中の氏名をそのまま使ってください。\n"
-            "各候補について、命式・MBTI等のどの情報から条件に合うと判断したか、reasonに具体的に書いてください。\n"
+            "各候補について、命式・MBTI等のどの情報から条件に合うと判断したか、reasonに簡潔に書いてください。\n"
             "caveatsには「占術だけで採用・配置を決定しないこと」「本人の意向や実績も必ず確認すること」という"
             "趣旨の注意書きを必ず1件以上含めてください。\n"
             "recommend_teamツールを使って回答を構造化して提出してください。"
         )
         return self._call_tool(
-            "recommend_team", TeamRecommendationResponse.model_json_schema(), user_content, TeamRecommendationResponse
+            "recommend_team",
+            TeamRecommendationResponse.model_json_schema(),
+            user_content,
+            TeamRecommendationResponse,
+            max_tokens=1200,
         )

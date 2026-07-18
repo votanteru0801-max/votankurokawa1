@@ -97,16 +97,16 @@ class AnthropicAIClient:
         return self._call_tool("submit_analysis", schema_cls.model_json_schema(), user_content, schema_cls)
 
     def recommend_team(self, criteria: str, candidates: list[dict]) -> TeamRecommendationResponse:
-        candidates_text = "\n".join(
-            f"- {c['name']}（所属:{c.get('department','不明')} / MBTI:{c.get('mbti') or '不明'} / "
-            f"日主:{c.get('day_master_element','?')}{c.get('day_master_yinyang','')} / "
-            f"中心星:{c.get('center_star') or '不明'}）"
+        candidates_text = "氏名,所属,MBTI,日主,中心星\n" + "\n".join(
+            f"{c['name']},{c.get('department') or '-'},{c.get('mbti') or '-'},"
+            f"{c.get('day_master_element','?')}{c.get('day_master_yinyang','')},"
+            f"{c.get('center_star') or '-'}"
             for c in candidates
         )
         user_content = (
             f"石橋輝一からの依頼: 次の条件に合う新プロジェクトメンバーの候補を、"
-            f"以下の候補者一覧の中から選んでください。\n条件: {criteria}\n\n"
-            + wrap_as_data_not_instruction("候補者一覧（命式の要約データ）", candidates_text)
+            f"以下の候補者一覧(CSV形式: 氏名,所属,MBTI,日主,中心星)の中から選んでください。\n条件: {criteria}\n\n"
+            + wrap_as_data_not_instruction("候補者一覧（命式の要約データ、CSV形式）", candidates_text)
             + "\n重要: 候補者一覧に無い名前を作り出さないでください。必ず一覧の中の氏名をそのまま使ってください。\n"
             "各候補について、命式・MBTI等のどの情報から条件に合うと判断したか、reasonに具体的に書いてください。\n"
             "caveatsには「占術だけで採用・配置を決定しないこと」「本人の意向や実績も必ず確認すること」という"
