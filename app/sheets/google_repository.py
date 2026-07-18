@@ -227,6 +227,13 @@ class GoogleSheetsPersonRepository:
                     birth_date = _parse_birth_date(birth_raw)
                     birth_time, birth_time_unknown = _parse_birth_time(time_raw)
 
+                    if "濱澤" in name:
+                        print(
+                            f"[SHEETS_DEBUG] name={name!r} header_map={header_map} "
+                            f"row_cells[:8]={row_cells[:8]!r} gender_raw={gender_raw!r} "
+                            f"time_raw={time_raw!r} birth_time_unknown={birth_time_unknown}"
+                        )
+
                     people.append(
                         Person(
                             person_id=_make_person_id(department, name, birth_raw),
