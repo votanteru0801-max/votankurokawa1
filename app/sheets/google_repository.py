@@ -1,15 +1,18 @@
 """Google Sheets APIを用いた本番用リポジトリ実装。
 
-実シート構成の調査結果（2026-07-17確認）:
-実際のスプレッドシート（タブ名「生年月日」）は、1行1人の単一テーブルではなく、
-店舗・チームごとに「名前」を先頭列とする小さな表がシート内に複数（横にも縦にも）
-並んでいる手作業運用のレイアウトだった。列の並びはブロックごとに微妙に異なり
-（例: 一部のブロックだけ「名前」と「生年月日」の間に非表示の「性別」列が
-挿入されている）、固定の列位置では正しく読み取れないことが判明した。
+実シート構成の調査結果（2026-07-17〜18確認）:
+実際のスプレッドシートには「生年月日」「最新生年月日」という似た名前のタブが
+両方存在し、実際に運用されている（性別等が入力済みの）データは「最新生年月日」
+タブの方だった（「生年月日」タブは性別列が未入力の古いバージョンだった）。
+そのため BIRTHDAY_SHEET_NAME は「最新生年月日」を指すようにしている。
+このタブは、1行1人の単一テーブルではなく、店舗・チームごとに「名前」を
+先頭列とする小さな表がシート内に複数（横にも縦にも）並んでいる手作業運用の
+レイアウトだった。列の並びはブロックごとに微妙に異なるため、固定の列位置では
+なく見出し名から動的に列を判定する方式にしている。
 person_id・人物区分・部署コード・面談記録・評価などの列は存在しない。
 
 このため、当面は以下の方針で実装する（ユーザー確認済み・2026-07-17）:
-- 既存の「生年月日」タブは一切変更しない（列追加・並び替えをしない）。
+- 既存の「最新生年月日」タブは一切変更しない（列追加・並び替えをしない）。
 - 「名前」というセルを見出し行の起点として検出し、そこから右方向に隣接する
   セルを見出し名（性別/生年月日/時間/場所/MBTI等）として読み取り、ブロックごとに
   列の並びを個別に判定する（固定オフセットに依存しない）。
@@ -33,7 +36,7 @@ from uuid import UUID
 from app.config import get_settings
 from app.schemas.person import Gender, Person, PersonCategory, PersonSearchQuery, RetentionInfo
 
-BIRTHDAY_SHEET_NAME = "生年月日"
+BIRTHDAY_SHEET_NAME = "最新生年月日"
 
 # 見出しセルの文字列 -> 内部フィールド名。ここに無い見出し列は無視する。
 HEADER_ALIASES: dict[str, str] = {
@@ -157,39 +160,7 @@ class GoogleSheetsPersonRepository:
             .get(spreadsheetId=self.spreadsheet_id, range=f"{BIRTHDAY_SHEET_NAME}!A1:BZ500")
             .execute()
         )
-        grid = result.get("values", [])
-
-        # 調査用: スプレッドシート内の全タブ名を確認する（同名タブが複数あり、
-        # 意図しない方を読んでいないか確認するため）。
-        try:
-            meta = self._get_service().spreadsheets().get(
-                spreadsheetId=self.spreadsheet_id, fields="sheets.properties(sheetId,title,index,gridProperties)"
-            ).execute()
-            for sh in meta.get("sheets", []):
-                props = sh.get("properties", {})
-                print(f"[SHEETS_DEBUG] tab: title={props.get('title')!r} sheetId={props.get('sheetId')} index={props.get('index')} rows={props.get('gridProperties', {}).get('rowCount')} cols={props.get('gridProperties', {}).get('columnCount')}")
-        except Exception as e:
-            print(f"[SHEETS_DEBUG] tab list fetch failed: {type(e).__name__}: {e}")
-
-        # 調査用: B4セル（濱澤ひかりの性別のはず）の生データを、可能な限り
-        # 詳しい情報付きで単独取得する。
-        try:
-            detail = (
-                self._get_service()
-                .spreadsheets()
-                .get(
-                    spreadsheetId=self.spreadsheet_id,
-                    ranges=[f"{BIRTHDAY_SHEET_NAME}!B4"],
-                    includeGridData=True,
-                )
-                .execute()
-            )
-            cell = detail["sheets"][0]["data"][0]["rowData"][0]["values"][0]
-            print(f"[SHEETS_DEBUG] B4 full cell data = {cell}")
-        except Exception as e:
-            print(f"[SHEETS_DEBUG] B4 detail fetch failed: {type(e).__name__}: {e}")
-
-        return grid
+        return result.get("values", [])
 
     def _department_label(self, grid: list[list[str]], row: int, col: int) -> str:
         # ヘッダー行(row)の直上から数行、同じ列を上向きに探索し、最初に見つかった
@@ -258,9 +229,6 @@ class GoogleSheetsPersonRepository:
 
                     birth_date = _parse_birth_date(birth_raw)
                     birth_time, birth_time_unknown = _parse_birth_time(time_raw)
-
-                    if len(people) < 15:
-                        print(f"[SHEETS_DEBUG] #{len(people)} name={name!r} gender_raw={gender_raw!r} dept={department!r}")
 
                     people.append(
                         Person(
