@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Literal, Protocol, Union
 
-from app.ai.output_schemas import DetailedAnalysisResponse, SimpleAnalysisResponse
+from app.ai.output_schemas import DetailedAnalysisResponse, SimpleAnalysisResponse, TeamRecommendationResponse
 
 AnalysisMode = Literal["simple", "detailed"]
 
@@ -27,6 +27,14 @@ class AIAnalysisClient(Protocol):
         question: str,
         accuracy_notes: list[str],
     ) -> Union[SimpleAnalysisResponse, DetailedAnalysisResponse]:
+        ...
+
+    def recommend_team(
+        self,
+        criteria: str,
+        candidates: list[dict],
+    ) -> TeamRecommendationResponse:
+        """条件に合う人物候補を、軽量な命式サマリー一覧から提案する。"""
         ...
 
 

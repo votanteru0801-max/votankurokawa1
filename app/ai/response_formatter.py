@@ -1,7 +1,12 @@
 """構造化分析結果をLINE向けの日本語テキストに整形する。"""
 from __future__ import annotations
 
-from app.ai.output_schemas import DetailedAnalysisResponse, LabeledPoint, SimpleAnalysisResponse
+from app.ai.output_schemas import (
+    DetailedAnalysisResponse,
+    LabeledPoint,
+    SimpleAnalysisResponse,
+    TeamRecommendationResponse,
+)
 
 
 def _points(points: list[LabeledPoint]) -> str:
@@ -53,4 +58,18 @@ def format_detailed_analysis(resp: DetailedAnalysisResponse) -> str:
         parts.append("■判断前に確認すべき事実\n" + "\n".join(f"・【確認したいこと】{f}" for f in resp.facts_to_confirm))
     if resp.accuracy_notes:
         parts.append("■出生時間・データ不足などの注意\n" + "\n".join(f"・{n}" for n in resp.accuracy_notes))
+    return "\n\n".join(parts)
+
+
+def format_team_recommendation(resp: TeamRecommendationResponse) -> str:
+    parts = [f"■条件\n{resp.criteria}"]
+    if resp.recommended:
+        candidate_lines = "\n\n".join(
+            f"・{c.name}\n　理由: {c.reason}" for c in resp.recommended
+        )
+        parts.append(f"■推薦候補\n{candidate_lines}")
+    else:
+        parts.append("■推薦候補\n条件に合う候補が見つかりませんでした。")
+    if resp.caveats:
+        parts.append("■注意事項\n" + "\n".join(f"・{c}" for c in resp.caveats))
     return "\n\n".join(parts)

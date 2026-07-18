@@ -17,8 +17,10 @@ from uuid import UUID
 
 from app.ai.client_interface import AnalysisGenerationError
 from app.ai.prompt_design import DataPurpose
-from app.ai.response_formatter import format_detailed_analysis, format_simple_analysis
-from app.ai.tool_executor import ToolContext, ToolValidationError, execute_tool
+from app.ai.response_formatter import format_detailed_analysis, format_simple_analysis, format_team_recommendation
+from app.ai.tool_executor import ToolContext, ToolValidationError, _birth_input_from_person, execute_tool
+from app.calculation.engine import run_full_calculation
+from app.calculation.policy import DEFAULT_POLICY
 from app.config import get_settings
 from app.line import nl_update_parser
 from app.line.messaging import prepare_reply_messages
@@ -106,6 +108,32 @@ def _extract_person_name(repo: PersonRepository, text: str) -> str | None:
     return None
 
 
+def _build_lightweight_candidates(repo: PersonRepository) -> list[dict]:
+    """新プロジェクトメンバー推薦用に、氏名・所属・MBTI・命式の要約（五行・中心星）
+    のみを含む候補者一覧を作る。健康情報・家族情報・面談記録・退職相談記録などの
+    機微情報は一切含めない（データ最小化）。"""
+    candidates: list[dict] = []
+    for person in repo.list_all():
+        if person.birth_date is None:
+            continue
+        try:
+            birth = _birth_input_from_person(person)
+            result = run_full_calculation(birth, DEFAULT_POLICY)
+        except Exception:
+            continue
+        candidates.append(
+            {
+                "name": person.name,
+                "department": person.department,
+                "mbti": person.mbti,
+                "day_master_element": result.shichuu_suimei.day_master_element,
+                "day_master_yinyang": result.shichuu_suimei.day_master_yinyang,
+                "center_star": result.sanmeigaku.center_star,
+            }
+        )
+    return candidates
+
+
 def _resolve_candidate_choice(repo: PersonRepository, candidate_ids: list[str], text: str):
     text = text.strip()
     if text.isdigit():
@@ -141,6 +169,7 @@ class Orchestrator:
             "analysis_disambiguation": self._handle_analysis_disambiguation,
             "awaiting_analysis_person_name": self._handle_awaiting_analysis_person_name,
             "awaiting_interview_person_name": self._handle_awaiting_interview_person_name,
+            "team_recommendation_awaiting_criteria": self._handle_team_recommendation_criteria,
         }
         if state.state_type in handlers:
             return handlers[state.state_type](line_user_id, text, state, line_event_id)
@@ -184,6 +213,16 @@ class Orchestrator:
 
         if text in ("相性分析", "人材を比較"):
             return ["この機能は第2段階で実装予定です。現在はご利用いただけません（docs/phase2-design.md）。"]
+
+        if text in ("プロジェクトメンバーを選ぶ", "メンバーを選ぶ", "メンバー選定") or (
+            "メンバー" in text and any(k in text for k in ("選", "候補", "推薦", "洗い出", "探して"))
+        ):
+            conversation_service.set_state(self.db, line_user_id, "team_recommendation_awaiting_criteria", {})
+            return [
+                "どんな条件でメンバーを選びますか？"
+                "（例:「リーダーシップと創造性がある人を3人」）"
+                "人数や、対象を絞りたい店舗・部署があれば、それも教えてください。"
+            ]
 
         mode = _detect_analysis_mode(text)
         if mode:
@@ -525,4 +564,33 @@ class Orchestrator:
         )
 
         formatted = format_detailed_analysis(resp) if mode == "detailed" else format_simple_analysis(resp)
+        return prepare_reply_messages(formatted)
+
+    # ---- 新プロジェクトメンバー候補の推薦 ----
+    def _handle_team_recommendation_criteria(self, line_user_id: str, text: str, state, line_event_id: str) -> list[str]:
+        if text in ("中止", "中止する", "やめる"):
+            conversation_service.clear_state(self.db, line_user_id)
+            return ["中止しました。"]
+
+        criteria = text
+        candidates = _build_lightweight_candidates(self.repo)
+        conversation_service.clear_state(self.db, line_user_id)
+
+        if not candidates:
+            return ["生年月日が登録されている人物が見つからなかったため、候補を選べませんでした。"]
+
+        try:
+            resp = self.ai_client.recommend_team(criteria, candidates)
+        except AnalysisGenerationError:
+            return ["候補の選定に失敗しました。時間をおいて再度お試しください。"]
+
+        settings = get_settings()
+        audit_service.log_ai_request(
+            self.db, line_user_id, intent="team_recommendation",
+            tool_calls={"recommend_team": 1},
+            data_sent_summary={"candidate_count": len(candidates)},
+            model=settings.anthropic_model,
+        )
+
+        formatted = format_team_recommendation(resp)
         return prepare_reply_messages(formatted)
