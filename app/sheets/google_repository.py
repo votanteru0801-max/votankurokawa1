@@ -150,37 +150,33 @@ class GoogleSheetsPersonRepository:
         return self._service
 
     def _fetch_grid(self) -> list[list[str]]:
-        """シートの全セルを「表示されている文字列」ベースで取得する。
-
-        values().get()（単純なCSV的取得）は、プルダウン形式の入力規則セルなど
-        一部のセル種別で値を正しく返さないことが判明したため、
-        spreadsheets().get(includeGridData=True) を使い、各セルの
-        formattedValue（実際に画面に表示されている文字列）を直接読み取る方式に
-        している。こちらはプルダウン・チェックボックス等でも表示どおりの値が
-        取得できる。
-        """
         service = self._get_service()
         result = (
             service.spreadsheets()
-            .get(
-                spreadsheetId=self.spreadsheet_id,
-                ranges=[f"{BIRTHDAY_SHEET_NAME}!A1:BZ500"],
-                includeGridData=True,
-                fields="sheets.data.rowData.values.formattedValue",
-            )
+            .values()
+            .get(spreadsheetId=self.spreadsheet_id, range=f"{BIRTHDAY_SHEET_NAME}!A1:BZ500")
             .execute()
         )
-        sheets = result.get("sheets", [])
-        if not sheets:
-            return []
-        data = sheets[0].get("data", [])
-        if not data:
-            return []
-        row_data = data[0].get("rowData", [])
-        grid: list[list[str]] = []
-        for row in row_data:
-            values = row.get("values", [])
-            grid.append([(v.get("formattedValue") or "") for v in values])
+        grid = result.get("values", [])
+
+        # 調査用: B4セル（濱澤ひかりの性別のはず）の生データを、可能な限り
+        # 詳しい情報付きで単独取得する。
+        try:
+            detail = (
+                self._get_service()
+                .spreadsheets()
+                .get(
+                    spreadsheetId=self.spreadsheet_id,
+                    ranges=[f"{BIRTHDAY_SHEET_NAME}!B4"],
+                    includeGridData=True,
+                )
+                .execute()
+            )
+            cell = detail["sheets"][0]["data"][0]["rowData"][0]["values"][0]
+            print(f"[SHEETS_DEBUG] B4 full cell data = {cell}")
+        except Exception as e:
+            print(f"[SHEETS_DEBUG] B4 detail fetch failed: {type(e).__name__}: {e}")
+
         return grid
 
     def _department_label(self, grid: list[list[str]], row: int, col: int) -> str:
