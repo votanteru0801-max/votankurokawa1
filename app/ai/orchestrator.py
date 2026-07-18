@@ -18,15 +18,14 @@ from uuid import UUID
 from app.ai.client_interface import AnalysisGenerationError
 from app.ai.prompt_design import DataPurpose
 from app.ai.response_formatter import format_detailed_analysis, format_simple_analysis, format_team_recommendation
-from app.ai.tool_executor import ToolContext, ToolValidationError, _birth_input_from_person, execute_tool
-from app.calculation.engine import run_full_calculation
-from app.calculation.policy import DEFAULT_POLICY
+from app.ai.tool_executor import ToolContext, ToolValidationError, execute_tool
 from app.config import get_settings
 from app.line import nl_update_parser
 from app.line.messaging import prepare_reply_messages
 from app.line.nl_registration_parser import ParsedRegistration, parse_bulk_registration_text
 from app.schemas.person import Gender, PersonCategory
 from app.services import audit_service, conversation_service, interview_service, person_service
+from app.services.team_recommendation import build_lightweight_candidates
 from app.sheets.interface import PersonRepository
 
 FIELD_LABELS = {
@@ -106,32 +105,6 @@ def _extract_person_name(repo: PersonRepository, text: str) -> str | None:
         if name and _norm_for_match(name) in norm_text:
             return name
     return None
-
-
-def _build_lightweight_candidates(repo: PersonRepository) -> list[dict]:
-    """新プロジェクトメンバー推薦用に、氏名・所属・MBTI・命式の要約（五行・中心星）
-    のみを含む候補者一覧を作る。健康情報・家族情報・面談記録・退職相談記録などの
-    機微情報は一切含めない（データ最小化）。"""
-    candidates: list[dict] = []
-    for person in repo.list_all():
-        if person.birth_date is None:
-            continue
-        try:
-            birth = _birth_input_from_person(person)
-            result = run_full_calculation(birth, DEFAULT_POLICY)
-        except Exception:
-            continue
-        candidates.append(
-            {
-                "name": person.name,
-                "department": person.department,
-                "mbti": person.mbti,
-                "day_master_element": result.shichuu_suimei.day_master_element,
-                "day_master_yinyang": result.shichuu_suimei.day_master_yinyang,
-                "center_star": result.sanmeigaku.center_star,
-            }
-        )
-    return candidates
 
 
 def _resolve_candidate_choice(repo: PersonRepository, candidate_ids: list[str], text: str):
@@ -573,7 +546,7 @@ class Orchestrator:
             return ["中止しました。"]
 
         criteria = text
-        candidates = _build_lightweight_candidates(self.repo)
+        candidates = build_lightweight_candidates(self.repo)
         conversation_service.clear_state(self.db, line_user_id)
 
         if not candidates:

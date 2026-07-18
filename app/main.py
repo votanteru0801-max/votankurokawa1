@@ -6,11 +6,13 @@ from fastapi import FastAPI
 
 from app.config import get_settings
 from app.line.webhook import router as line_webhook_router
+from app.web.dashboard import router as dashboard_router
 
 logger = structlog.get_logger()
 
 app = FastAPI(title="黒革の手帳", description="石橋輝一専用 人事分析LINE Bot", version="0.1.0")
 app.include_router(line_webhook_router)
+app.include_router(dashboard_router)
 
 
 @app.get("/health")

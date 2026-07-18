@@ -65,6 +65,10 @@ class Settings(BaseSettings):
 
     undo_window_minutes: int = 1440
 
+    # Web版簡易ダッシュボード(/dashboard)のパスワード。未設定の場合はダッシュボードを
+    # 無効化する（機微な人事情報を誤って無防備に公開しないための安全策）。
+    dashboard_password: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:
