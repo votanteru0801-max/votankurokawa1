@@ -159,6 +159,18 @@ class GoogleSheetsPersonRepository:
         )
         grid = result.get("values", [])
 
+        # 調査用: スプレッドシート内の全タブ名を確認する（同名タブが複数あり、
+        # 意図しない方を読んでいないか確認するため）。
+        try:
+            meta = self._get_service().spreadsheets().get(
+                spreadsheetId=self.spreadsheet_id, fields="sheets.properties(sheetId,title,index,gridProperties)"
+            ).execute()
+            for sh in meta.get("sheets", []):
+                props = sh.get("properties", {})
+                print(f"[SHEETS_DEBUG] tab: title={props.get('title')!r} sheetId={props.get('sheetId')} index={props.get('index')} rows={props.get('gridProperties', {}).get('rowCount')} cols={props.get('gridProperties', {}).get('columnCount')}")
+        except Exception as e:
+            print(f"[SHEETS_DEBUG] tab list fetch failed: {type(e).__name__}: {e}")
+
         # 調査用: B4セル（濱澤ひかりの性別のはず）の生データを、可能な限り
         # 詳しい情報付きで単独取得する。
         try:
