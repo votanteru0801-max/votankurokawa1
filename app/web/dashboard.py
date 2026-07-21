@@ -2,8 +2,12 @@
 
 LINE版と同じデータ（Googleスプレッドシート）・同じAIクライアントを使い、
 「一覧を見ながら選ぶ」操作がしやすい機能をタブ形式のWeb画面として提供する。
-- 社員一覧タブ: 氏名・所属・役職・MBTIのみで検索・一覧表示（機微情報は表示しない）
+- 社員一覧タブ: 氏名・所属・役職・MBTIのみで検索・一覧表示（機微情報は表示しない）。
+  各行から簡易/詳細分析をLINEと同じロジックで実行できる。
 - メンバー選定タブ: 条件を入力して新プロジェクトメンバー候補をAIに推薦させる
+- 今月のアラートタブ: 命式の十二運（伝統的な命理学の法則）から機械的に
+  気力が下がりやすい時期の人物を抽出する。AIは使わない（無料枠のトークン
+  上限に左右されず、全社員分でも安定して動く設計）。
 
 認証は簡易パスワードのみ（単一利用者向けの最小構成）。DASHBOARD_PASSWORD が
 未設定の場合はダッシュボード自体を無効化し、機微な人事情報が無防備に
@@ -101,6 +105,9 @@ DASHBOARD_HTML = """<!doctype html>
   .caveats { background: #fff8e1; border: 1px solid #ffe0a3; border-radius: 6px; padding: 12px 14px; margin-top: 16px; font-size: 13px; }
   .muted { color: #888; font-size: 13px; }
   .loading { color: #888; font-size: 13px; margin-top: 10px; }
+  .analysis-btn { padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; margin-right: 4px; }
+  .analysis-text { white-space: pre-wrap; font-size: 13px; line-height: 1.6; }
+  .alert-stage { display: inline-block; padding: 2px 8px; border-radius: 10px; background: #ffe0a3; font-size: 12px; margin-left: 6px; }
 </style>
 </head>
 <body>
@@ -111,15 +118,18 @@ DASHBOARD_HTML = """<!doctype html>
 <div class="tabs">
   <div class="tab active" data-tab="people">社員一覧</div>
   <div class="tab" data-tab="team">メンバー選定</div>
+  <div class="tab" data-tab="alerts">今月のアラート</div>
 </div>
 
 <div class="panel active" id="panel-people">
   <input type="text" id="people-search" placeholder="氏名・所属・役職・MBTIで検索">
   <table id="people-table">
-    <thead><tr><th>氏名</th><th>所属</th><th>役職</th><th>MBTI</th><th>在籍状況</th></tr></thead>
+    <thead><tr><th>氏名</th><th>所属</th><th>役職</th><th>MBTI</th><th>在籍状況</th><th>分析</th></tr></thead>
     <tbody></tbody>
   </table>
   <div class="muted" id="people-count"></div>
+  <div class="loading" id="analysis-loading" style="display:none;">分析中です（初回アクセス直後は最大1分ほどかかることがあります）…</div>
+  <div id="analysis-result"></div>
 </div>
 
 <div class="panel" id="panel-team">
@@ -128,6 +138,13 @@ DASHBOARD_HTML = """<!doctype html>
   <button class="action" id="team-submit">候補を推薦させる</button>
   <div class="loading" id="team-loading" style="display:none;">選定中です（初回アクセス直後は最大1分ほどかかることがあります）…</div>
   <div id="team-result"></div>
+</div>
+
+<div class="panel" id="panel-alerts">
+  <p class="muted">命式の十二運（古典命理学の法則）から、今月「気力が下がりやすい時期」とされる人を機械的に抽出します（AIは使いません）。</p>
+  <button class="action" id="alerts-load">今月のアラートを表示</button>
+  <div class="loading" id="alerts-loading" style="display:none;">計算中です…</div>
+  <div id="alerts-result"></div>
 </div>
 
 <script>
@@ -150,10 +167,42 @@ async function loadPeople(q) {
     const tr = document.createElement('tr');
     tr.innerHTML = '<td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(p.department) +
       '</td><td>' + escapeHtml(p.position) + '</td><td>' + escapeHtml(p.mbti) +
-      '</td><td>' + escapeHtml(p.status) + '</td>';
+      '</td><td>' + escapeHtml(p.status) + '</td><td></td>';
+    const btnSimple = document.createElement('button');
+    btnSimple.className = 'analysis-btn';
+    btnSimple.textContent = '簡易分析';
+    btnSimple.addEventListener('click', () => runAnalysis(p.name, 'simple'));
+    const btnDetailed = document.createElement('button');
+    btnDetailed.className = 'analysis-btn';
+    btnDetailed.textContent = '詳細分析';
+    btnDetailed.addEventListener('click', () => runAnalysis(p.name, 'detailed'));
+    tr.lastElementChild.appendChild(btnSimple);
+    tr.lastElementChild.appendChild(btnDetailed);
     tbody.appendChild(tr);
   });
   document.getElementById('people-count').textContent = data.people.length + '件表示中（最大300件）';
+}
+
+async function runAnalysis(name, mode) {
+  const resultEl = document.getElementById('analysis-result');
+  const loadingEl = document.getElementById('analysis-loading');
+  resultEl.innerHTML = '';
+  loadingEl.style.display = 'block';
+  try {
+    const res = await fetch('/dashboard/api/analysis?name=' + encodeURIComponent(name) + '&mode=' + mode);
+    const data = await res.json();
+    loadingEl.style.display = 'none';
+    if (data.error) {
+      resultEl.innerHTML = '<div class="card"><p style="color:#c0392b">' + escapeHtml(data.error) + '</p></div>';
+      return;
+    }
+    resultEl.innerHTML = '<div class="card"><h3>' + escapeHtml(name) + '（' +
+      (mode === 'detailed' ? '詳細分析' : '簡易分析') + '）</h3>' +
+      '<div class="analysis-text">' + escapeHtml(data.text) + '</div></div>';
+  } catch (e) {
+    loadingEl.style.display = 'none';
+    resultEl.innerHTML = '<p style="color:#c0392b">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+  }
 }
 
 function escapeHtml(s) {
@@ -164,6 +213,33 @@ let searchTimer = null;
 document.getElementById('people-search').addEventListener('input', (e) => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => loadPeople(e.target.value), 250);
+});
+
+document.getElementById('alerts-load').addEventListener('click', async () => {
+  const resultEl = document.getElementById('alerts-result');
+  const loadingEl = document.getElementById('alerts-loading');
+  resultEl.innerHTML = '';
+  loadingEl.style.display = 'block';
+  try {
+    const res = await fetch('/dashboard/api/monthly-alerts');
+    const data = await res.json();
+    loadingEl.style.display = 'none';
+    if (!data.alerts || data.alerts.length === 0) {
+      resultEl.innerHTML = '<p class="muted">' + escapeHtml(data.target_month || '') + ': 該当者はいませんでした。</p>';
+      return;
+    }
+    let html = '<p class="muted">' + escapeHtml(data.target_month) + '</p>';
+    data.alerts.forEach(a => {
+      html += '<div class="card"><h3>' + escapeHtml(a.name) + '（' + escapeHtml(a.department) + '）' +
+        '<span class="alert-stage">' + escapeHtml(a.twelve_stage) + '</span></h3>' +
+        '<p>' + escapeHtml(a.note) + '</p></div>';
+    });
+    html += '<div class="caveats">' + escapeHtml(data.caveat) + '</div>';
+    resultEl.innerHTML = html;
+  } catch (e) {
+    loadingEl.style.display = 'none';
+    resultEl.innerHTML = '<p style="color:#c0392b">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+  }
 });
 
 document.getElementById('team-submit').addEventListener('click', async () => {
@@ -308,4 +384,57 @@ def api_team_recommendation(
         "criteria": resp.criteria,
         "recommended": [{"name": c.name, "reason": c.reason} for c in resp.recommended],
         "caveats": resp.caveats,
+    }
+
+
+@router.get("/api/analysis")
+def api_analysis(
+    name: str, mode: str = "simple", kuroeda_dashboard_session: str | None = Cookie(default=None)
+) -> dict:
+    _require_auth(kuroeda_dashboard_session)
+    from app.ai.factory import get_ai_client
+    from app.services import analysis_service, person_service
+    from app.sheets.google_repository import get_person_repository
+
+    if mode not in ("simple", "detailed"):
+        mode = "simple"
+
+    settings = get_settings()
+    repo = get_person_repository()
+    person, candidates = person_service.resolve_person_by_name(repo, name)
+    if person is None and candidates:
+        return {"error": person_service.build_disambiguation_message(candidates)}
+    if person is None:
+        return {"error": f"「{name}」に該当する人物が見つかりませんでした。"}
+
+    ai_client = get_ai_client()
+    actor_id = f"web:{settings.allowed_line_user_id}"
+    label = "詳細分析" if mode == "detailed" else "簡易分析"
+    engine = get_engine()
+    with Session(engine) as db:
+        try:
+            text = analysis_service.run_analysis_for_person(
+                db, repo, ai_client, actor_id, person, f"{person.name}の{label}", mode
+            )
+        except analysis_service.AnalysisError as e:
+            return {"error": str(e)}
+
+    return {"text": text}
+
+
+@router.get("/api/monthly-alerts")
+def api_monthly_alerts(kuroeda_dashboard_session: str | None = Cookie(default=None)) -> dict:
+    _require_auth(kuroeda_dashboard_session)
+    from datetime import date
+
+    from app.services import monthly_alert
+    from app.sheets.google_repository import get_person_repository
+
+    repo = get_person_repository()
+    today = date.today()
+    alerts = monthly_alert.build_monthly_alerts(repo, today)
+    return {
+        "target_month": f"{today.year}年{today.month}月",
+        "alerts": alerts,
+        "caveat": monthly_alert.CAVEAT,
     }

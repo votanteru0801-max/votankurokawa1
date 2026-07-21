@@ -16,15 +16,14 @@ from datetime import date, time
 from uuid import UUID
 
 from app.ai.client_interface import AnalysisGenerationError
-from app.ai.prompt_design import DataPurpose
-from app.ai.response_formatter import format_detailed_analysis, format_simple_analysis, format_team_recommendation
-from app.ai.tool_executor import ToolContext, ToolValidationError, execute_tool
+from app.ai.response_formatter import format_team_recommendation
+from app.ai.tool_executor import ToolContext, execute_tool
 from app.config import get_settings
 from app.line import nl_update_parser
 from app.line.messaging import prepare_reply_messages
 from app.line.nl_registration_parser import ParsedRegistration, parse_bulk_registration_text
 from app.schemas.person import Gender, PersonCategory
-from app.services import audit_service, conversation_service, interview_service, person_service
+from app.services import analysis_service, audit_service, conversation_service, interview_service, person_service
 from app.services.team_recommendation import build_lightweight_candidates
 from app.sheets.interface import PersonRepository
 
@@ -492,51 +491,12 @@ class Orchestrator:
         return self._run_analysis_for_person(line_user_id, person, question, mode)
 
     def _run_analysis_for_person(self, line_user_id: str, person, question: str, mode: str) -> list[str]:
-        ctx = ToolContext(line_user_id, self.db, self.repo)
         try:
-            four_pillars = execute_tool("calculate_four_pillars", {"person_id": str(person.person_id)}, ctx)
-            sanmeigaku = execute_tool("calculate_sanmeigaku", {"person_id": str(person.person_id)}, ctx)
-            luck = execute_tool(
-                "get_luck_cycles", {"person_id": str(person.person_id), "annual_year": date.today().year}, ctx
+            formatted = analysis_service.run_analysis_for_person(
+                self.db, self.repo, self.ai_client, line_user_id, person, question, mode
             )
-        except ToolValidationError as e:
-            return [f"命式計算でエラーが発生しました: {e}"]
-
-        calculation_data = {"shichuu_suimei": four_pillars, "sanmeigaku": sanmeigaku, "luck_cycles": luck}
-        purpose = DataPurpose.DETAILED_ANALYSIS if mode == "detailed" else DataPurpose.SIMPLE_ANALYSIS
-        hr_context = execute_tool(
-            "get_relevant_hr_context", {"person_id": str(person.person_id), "purpose": purpose.value}, ctx
-        )
-
-        # 出生時間・性別未登録などの精度上の注意は、決定論的な計算結果から確定させる
-        # （AIの自由記述に判断させると、無料/軽量モデルでは実際のデータを見ずに
-        # プロンプト中の一般的な注意書きをそのまま繰り返してしまうことがあるため）。
-        accuracy_notes: list[str] = []
-        if four_pillars.get("hour_pillar_omitted_reason"):
-            accuracy_notes.append(four_pillars["hour_pillar_omitted_reason"])
-        if luck.get("unavailable_reason"):
-            accuracy_notes.append(luck["unavailable_reason"])
-
-        try:
-            resp = self.ai_client.generate_analysis(
-                mode, person.name, str(person.person_id), calculation_data, hr_context, question, accuracy_notes
-            )
-        except AnalysisGenerationError:
-            return ["AI分析の生成に失敗しました。時間をおいて再度お試しください。"]
-
-        # AIが生成したaccuracy_notesは信頼せず、上で確定させた決定論的な注意事項で
-        # 必ず上書きする（要件1: 占術データはツールの結果のみを根拠とする）。
-        resp.accuracy_notes = accuracy_notes
-
-        settings = get_settings()
-        audit_service.log_ai_request(
-            self.db, line_user_id, intent=f"{mode}_analysis",
-            tool_calls={"calculate_four_pillars": 1, "calculate_sanmeigaku": 1, "get_luck_cycles": 1},
-            data_sent_summary={"fields": list(hr_context.keys())},
-            model=settings.anthropic_model,
-        )
-
-        formatted = format_detailed_analysis(resp) if mode == "detailed" else format_simple_analysis(resp)
+        except analysis_service.AnalysisError as e:
+            return [str(e)]
         return prepare_reply_messages(formatted)
 
     # ---- 新プロジェクトメンバー候補の推薦 ----
