@@ -24,7 +24,7 @@ from app.line.messaging import prepare_reply_messages
 from app.line.nl_registration_parser import ParsedRegistration, parse_bulk_registration_text
 from app.schemas.person import Gender, PersonCategory
 from app.services import analysis_service, audit_service, conversation_service, interview_service, person_service
-from app.services.team_recommendation import build_lightweight_candidates
+from app.services.team_recommendation import recommend_team_two_stage
 from app.sheets.interface import PersonRepository
 
 FIELD_LABELS = {
@@ -194,6 +194,7 @@ class Orchestrator:
                 "どんな条件でメンバーを選びますか？"
                 "（例:「リーダーシップと創造性がある人を3人」）"
                 "人数や、対象を絞りたい店舗・部署があれば、それも教えてください。"
+                "\n※2段階で絞り込むため、返信まで1〜2分ほどかかることがあります。"
             ]
 
         mode = _detect_analysis_mode(text)
@@ -506,22 +507,18 @@ class Orchestrator:
             return ["中止しました。"]
 
         criteria = text
-        candidates = build_lightweight_candidates(self.repo)
         conversation_service.clear_state(self.db, line_user_id)
 
-        if not candidates:
-            return ["生年月日が登録されている人物が見つからなかったため、候補を選べませんでした。"]
-
         try:
-            resp = self.ai_client.recommend_team(criteria, candidates)
+            resp = recommend_team_two_stage(self.repo, self.ai_client, criteria)
         except AnalysisGenerationError:
             return ["候補の選定に失敗しました。時間をおいて再度お試しください。"]
 
         settings = get_settings()
         audit_service.log_ai_request(
             self.db, line_user_id, intent="team_recommendation",
-            tool_calls={"recommend_team": 1},
-            data_sent_summary={"candidate_count": len(candidates)},
+            tool_calls={"recommend_team": 2},
+            data_sent_summary={"criteria": criteria},
             model=settings.anthropic_model,
         )
 

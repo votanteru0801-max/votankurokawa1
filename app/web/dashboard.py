@@ -136,7 +136,7 @@ DASHBOARD_HTML = """<!doctype html>
   <p class="muted">例:「リーダーシップと創造性がある人を3人」のように、条件と人数を入力してください。</p>
   <textarea id="team-criteria" placeholder="条件を入力（例: リーダーシップと創造性がある人を3人）"></textarea>
   <button class="action" id="team-submit">候補を推薦させる</button>
-  <div class="loading" id="team-loading" style="display:none;">選定中です（初回アクセス直後は最大1分ほどかかることがあります）…</div>
+  <div class="loading" id="team-loading" style="display:none;">選定中です（2段階で絞り込むため、最大1〜2分ほどかかることがあります）…</div>
   <div id="team-result"></div>
 </div>
 
@@ -354,18 +354,14 @@ def api_team_recommendation(
 ) -> dict:
     _require_auth(kuroeda_dashboard_session)
     from app.ai.factory import get_ai_client
-    from app.services.team_recommendation import build_lightweight_candidates
+    from app.services.team_recommendation import recommend_team_two_stage
     from app.sheets.google_repository import get_person_repository
 
     settings = get_settings()
     repo = get_person_repository()
-    candidates = build_lightweight_candidates(repo)
-    if not candidates:
-        return {"error": "生年月日が登録されている人物が見つからなかったため、候補を選べませんでした。"}
-
     ai_client = get_ai_client()
     try:
-        resp = ai_client.recommend_team(body.criteria, candidates)
+        resp = recommend_team_two_stage(repo, ai_client, body.criteria)
     except AnalysisGenerationError as e:
         return {"error": f"候補の選定に失敗しました。時間をおいて再度お試しください。（{e}）"}
 
@@ -375,8 +371,8 @@ def api_team_recommendation(
             db,
             f"web:{settings.allowed_line_user_id}",
             intent="team_recommendation_web",
-            tool_calls={"recommend_team": 1},
-            data_sent_summary={"candidate_count": len(candidates)},
+            tool_calls={"recommend_team": 2},
+            data_sent_summary={"criteria": body.criteria},
             model=settings.anthropic_model,
         )
 

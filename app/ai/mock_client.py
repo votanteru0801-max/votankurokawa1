@@ -103,8 +103,11 @@ class MockAIClient:
             criteria=criteria,
             recommended=[
                 TeamCandidate(
-                    name=c["name"],
-                    reason=f"モック応答: 日主{c.get('day_master_element','?')}・中心星{c.get('center_star') or '不明'}のため（実運用ではより具体的な理由が生成されます）。",
+                    name=c.get("氏名") or c.get("name", "?"),
+                    reason=(
+                        f"モック応答: 年齢{c.get('年齢', '不明')}・日主{c.get('日主', '?')}・"
+                        f"中心星{c.get('中心星') or '不明'}のため（実運用ではより具体的な理由が生成されます）。"
+                    ),
                 )
                 for c in picked
             ],
