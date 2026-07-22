@@ -38,7 +38,7 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-5"
-    anthropic_max_tool_retries: int = 2
+    anthropic_max_tool_retries: int = 3
 
     # AIプロバイダの選択。"mock"(既定) / "anthropic"(有料) / "gemini"(無料枠あり) /
     # "groq"(無料・学習不使用が利用規約に明記)。

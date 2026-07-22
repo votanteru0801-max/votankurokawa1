@@ -63,6 +63,12 @@ class GroqAIClient:
                     # 入力+出力の合計が収まるよう控えめな値にしている
                     # （呼び出し元ごとに必要最小限の値を渡す）。
                     max_tokens=max_tokens,
+                    # openai/gpt-oss系は内部の思考(reasoning)にもトークンを使うため、
+                    # 効果を「低」にして、その分をツール呼び出し自体に回す。
+                    # これを指定しないと、思考だけでmax_tokensを使い切ってしまい
+                    # 「Tool choice is required, but model did not call a tool」という
+                    # エラーになることがある。
+                    extra_body={"reasoning_effort": "low"},
                 )
             except Exception as e:  # Groq側のツール呼び出し検証エラー(400)等もここで捕捉して再試行する
                 last_error = e
