@@ -108,6 +108,12 @@ DASHBOARD_HTML = """<!doctype html>
   .analysis-btn { padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; margin-right: 4px; }
   .analysis-text { white-space: pre-wrap; font-size: 13px; line-height: 1.6; }
   .alert-stage { display: inline-block; padding: 2px 8px; border-radius: 10px; background: #ffe0a3; font-size: 12px; margin-left: 6px; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; z-index: 1000; }
+  .modal-overlay.open { display: flex; }
+  .modal-box { background: #fff; border-radius: 8px; padding: 20px 24px; max-width: 640px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,.2); }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .modal-header h3 { margin: 0; font-size: 16px; }
+  .modal-close { border: none; background: none; font-size: 22px; line-height: 1; cursor: pointer; color: #888; }
 </style>
 </head>
 <body>
@@ -128,8 +134,16 @@ DASHBOARD_HTML = """<!doctype html>
     <tbody></tbody>
   </table>
   <div class="muted" id="people-count"></div>
-  <div class="loading" id="analysis-loading" style="display:none;">分析中です（初回アクセス直後は最大1分ほどかかることがあります）…</div>
-  <div id="analysis-result"></div>
+</div>
+
+<div class="modal-overlay" id="analysis-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="modal-title"></h3>
+      <button class="modal-close" id="modal-close">&times;</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
 </div>
 
 <div class="panel" id="panel-team">
@@ -183,25 +197,37 @@ async function loadPeople(q) {
   document.getElementById('people-count').textContent = data.people.length + '件表示中（最大300件）';
 }
 
+function openModal(title) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML =
+    '<p class="loading" style="display:block;">分析中です（初回アクセス直後は最大1分ほどかかることがあります）…</p>';
+  document.getElementById('analysis-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('analysis-modal').classList.remove('open');
+}
+
+document.getElementById('modal-close').addEventListener('click', closeModal);
+document.getElementById('analysis-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'analysis-modal') { closeModal(); }
+});
+
 async function runAnalysis(name, mode) {
-  const resultEl = document.getElementById('analysis-result');
-  const loadingEl = document.getElementById('analysis-loading');
-  resultEl.innerHTML = '';
-  loadingEl.style.display = 'block';
+  const label = mode === 'detailed' ? '詳細分析' : '簡易分析';
+  // クリックした瞬間に必ずモーダルを開き、押した反応がすぐわかるようにする。
+  openModal(name + '（' + label + '）');
+  const bodyEl = document.getElementById('modal-body');
   try {
     const res = await fetch('/dashboard/api/analysis?name=' + encodeURIComponent(name) + '&mode=' + mode);
     const data = await res.json();
-    loadingEl.style.display = 'none';
     if (data.error) {
-      resultEl.innerHTML = '<div class="card"><p style="color:#c0392b">' + escapeHtml(data.error) + '</p></div>';
+      bodyEl.innerHTML = '<p style="color:#c0392b">' + escapeHtml(data.error) + '</p>';
       return;
     }
-    resultEl.innerHTML = '<div class="card"><h3>' + escapeHtml(name) + '（' +
-      (mode === 'detailed' ? '詳細分析' : '簡易分析') + '）</h3>' +
-      '<div class="analysis-text">' + escapeHtml(data.text) + '</div></div>';
+    bodyEl.innerHTML = '<div class="analysis-text">' + escapeHtml(data.text) + '</div>';
   } catch (e) {
-    loadingEl.style.display = 'none';
-    resultEl.innerHTML = '<p style="color:#c0392b">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+    bodyEl.innerHTML = '<p style="color:#c0392b">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
   }
 }
 
