@@ -274,7 +274,7 @@ function stageBadge(stage) {
 }
 
 function nl2br(s) {
-  return escapeHtml(s || '').replace(/\n/g, '<br>');
+  return escapeHtml(s || '').replace(/\\n/g, '<br>');
 }
 
 async function runFortune(name) {
