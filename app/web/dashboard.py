@@ -113,6 +113,10 @@ DASHBOARD_HTML = """<!doctype html>
   .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .modal-header h3 { margin: 0; font-size: 16px; }
   .modal-close { border: none; background: none; font-size: 22px; line-height: 1; cursor: pointer; color: #888; }
+  .field-label { display: block; margin-top: 12px; margin-bottom: 4px; font-size: 13px; color: #555; }
+  .checkbox-label { display: block; margin-top: 8px; font-size: 13px; color: #555; }
+  .checkbox-label input { width: auto; margin-right: 6px; }
+  select { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; background: #fff; }
 </style>
 </head>
 <body>
@@ -124,6 +128,7 @@ DASHBOARD_HTML = """<!doctype html>
   <div class="tab active" data-tab="people">社員一覧</div>
   <div class="tab" data-tab="team">メンバー選定</div>
   <div class="tab" data-tab="alerts">今月のアラート</div>
+  <div class="tab" data-tab="candidate">採用候補者</div>
 </div>
 
 <div class="panel active" id="panel-people">
@@ -151,6 +156,34 @@ DASHBOARD_HTML = """<!doctype html>
   <button class="action" id="team-submit">候補を推薦させる</button>
   <div class="loading" id="team-loading" style="display:none;">選定中です（2段階で絞り込むため、最大1〜2分ほどかかることがあります）…</div>
   <div id="team-result"></div>
+</div>
+
+<div class="panel" id="panel-candidate">
+  <p class="muted">採用選考中の候補者（まだ社員名簿に登録されていない人）の生年月日等を入力して、その場で分析します。入力内容は保存されません（画面を閉じると消えます）。</p>
+  <label class="field-label">氏名（任意）</label>
+  <input type="text" id="cand-name" placeholder="例: 山田 花子">
+  <label class="field-label">生年月日（必須）</label>
+  <input type="date" id="cand-birth-date">
+  <label class="field-label">出生時刻（分かれば）</label>
+  <input type="time" id="cand-birth-time">
+  <label class="checkbox-label"><input type="checkbox" id="cand-time-unknown"> 出生時刻は不明</label>
+  <label class="field-label">出生地（任意）</label>
+  <input type="text" id="cand-prefecture" placeholder="例: 福岡">
+  <label class="field-label">性別</label>
+  <select id="cand-gender">
+    <option value="unknown">不明</option>
+    <option value="male">男性</option>
+    <option value="female">女性</option>
+    <option value="other">その他</option>
+  </select>
+  <label class="field-label">MBTI（任意）</label>
+  <input type="text" id="cand-mbti" placeholder="例: INFP">
+  <div style="margin-top:14px;">
+    <button class="action" id="cand-simple">簡易分析</button>
+    <button class="action" id="cand-detailed" style="margin-left:8px;">詳細分析</button>
+  </div>
+  <div class="loading" id="cand-loading" style="display:none;">分析中です（初回アクセス直後は最大1分ほどかかることがあります）…</div>
+  <div id="cand-result"></div>
 </div>
 
 <div class="panel" id="panel-alerts">
@@ -363,6 +396,48 @@ document.getElementById('team-submit').addEventListener('click', async () => {
   }
 });
 
+async function runCandidateAnalysis(mode) {
+  const birthDate = document.getElementById('cand-birth-date').value;
+  const resultEl = document.getElementById('cand-result');
+  const loadingEl = document.getElementById('cand-loading');
+  resultEl.innerHTML = '';
+  if (!birthDate) {
+    resultEl.innerHTML = '<p style="color:#c0392b">生年月日を入力してください。</p>';
+    return;
+  }
+  loadingEl.style.display = 'block';
+  const payload = {
+    name: document.getElementById('cand-name').value,
+    birth_date: birthDate,
+    birth_time: document.getElementById('cand-birth-time').value,
+    birth_time_unknown: document.getElementById('cand-time-unknown').checked,
+    prefecture: document.getElementById('cand-prefecture').value,
+    gender: document.getElementById('cand-gender').value,
+    mbti: document.getElementById('cand-mbti').value,
+    mode: mode,
+  };
+  try {
+    const res = await fetch('/dashboard/api/candidate-analysis', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    loadingEl.style.display = 'none';
+    if (data.error) {
+      resultEl.innerHTML = '<p style="color:#c0392b">' + escapeHtml(data.error) + '</p>';
+      return;
+    }
+    resultEl.innerHTML = '<div class="card"><div class="analysis-text">' + escapeHtml(data.text) + '</div></div>';
+  } catch (e) {
+    loadingEl.style.display = 'none';
+    resultEl.innerHTML = '<p style="color:#c0392b">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+  }
+}
+
+document.getElementById('cand-simple').addEventListener('click', () => runCandidateAnalysis('simple'));
+document.getElementById('cand-detailed').addEventListener('click', () => runCandidateAnalysis('detailed'));
+
 loadPeople('');
 </script>
 </body>
@@ -521,6 +596,54 @@ def api_person_fortune(name: str, kuroeda_dashboard_session: str | None = Cookie
         return person_fortune.build_person_fortune(person)
     except ToolValidationError as e:
         return {"error": str(e)}
+
+
+class CandidateAnalysisRequest(BaseModel):
+    name: str = ""
+    birth_date: str = ""
+    birth_time: str = ""
+    birth_time_unknown: bool = False
+    prefecture: str = ""
+    gender: str = "unknown"
+    mbti: str = ""
+    mode: str = "simple"
+
+
+@router.post("/api/candidate-analysis")
+def api_candidate_analysis(
+    body: CandidateAnalysisRequest, kuroeda_dashboard_session: str | None = Cookie(default=None)
+) -> dict:
+    _require_auth(kuroeda_dashboard_session)
+    from app.ai.factory import get_ai_client
+    from app.services import analysis_service
+    from app.services.candidate_analysis import CandidateInputError, run_candidate_analysis
+
+    settings = get_settings()
+    ai_client = get_ai_client()
+    db = get_firestore_client()
+    actor_id = f"web:{settings.allowed_line_user_id}"
+    mode = body.mode if body.mode in ("simple", "detailed") else "simple"
+
+    try:
+        text = run_candidate_analysis(
+            db, ai_client, actor_id,
+            {
+                "name": body.name,
+                "birth_date": body.birth_date,
+                "birth_time": body.birth_time,
+                "birth_time_unknown": body.birth_time_unknown,
+                "prefecture": body.prefecture,
+                "gender": body.gender,
+                "mbti": body.mbti,
+            },
+            mode,
+        )
+    except CandidateInputError as e:
+        return {"error": str(e)}
+    except analysis_service.AnalysisError as e:
+        return {"error": str(e)}
+
+    return {"text": text}
 
 
 @router.get("/api/monthly-alerts")
