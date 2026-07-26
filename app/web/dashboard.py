@@ -273,6 +273,10 @@ function stageBadge(stage) {
   return '<span class="alert-stage">' + escapeHtml(stage) + '</span>';
 }
 
+function nl2br(s) {
+  return escapeHtml(s || '').replace(/\n/g, '<br>');
+}
+
 async function runFortune(name) {
   openModal(name + '（今年の運勢）');
   const bodyEl = document.getElementById('modal-body');
@@ -296,25 +300,30 @@ async function runFortune(name) {
       html += '<div class="card"><h3>' + escapeHtml(a.label) + 'の運勢' + stageBadge(a.twelve_stage) +
         '</h3><p>' + escapeHtml(a.stem + a.branch) + (a.ten_god ? '（' + escapeHtml(a.ten_god) + '）' : '') + '</p></div>';
     }
+    if ((data.kubou_branches || []).length) {
+      html += '<p class="muted">天中殺（空亡）の地支: ' + escapeHtml(data.kubou_branches.join('・')) + '</p>';
+    }
     if ((data.growth_periods || []).length) {
       html += '<div class="card"><h3>伸びどき</h3>';
       data.growth_periods.forEach(p => {
-        html += '<p><strong>' + escapeHtml(p.label) + '</strong>' + stageBadge(p.twelve_stage) + '<br>' + escapeHtml(p.note || '') + '</p>';
+        html += '<p><strong>' + escapeHtml(p.label) + '</strong>' + stageBadge(p.twelve_stage) + '<br>' + nl2br(p.note) + '</p>';
       });
       html += '</div>';
     }
     if ((data.support_periods || []).length) {
       html += '<div class="card"><h3>支えが必要な時期</h3>';
       data.support_periods.forEach(p => {
-        html += '<p><strong>' + escapeHtml(p.label) + '</strong>' + stageBadge(p.twelve_stage) + '<br>' + escapeHtml(p.note || '') + '</p>';
+        html += '<p><strong>' + escapeHtml(p.label) + '</strong>' + stageBadge(p.twelve_stage) + '<br>' + nl2br(p.note) + '</p>';
       });
       html += '</div>';
     }
     if ((data.monthly || []).length) {
-      html += '<div class="card"><h3>' + escapeHtml(String(data.year)) + '年の毎月の運勢</h3><table><thead><tr><th>月</th><th>干支</th><th>通変星</th><th>十二運</th></tr></thead><tbody>';
+      const kubou = new Set(data.kubou_branches || []);
+      html += '<div class="card"><h3>' + escapeHtml(String(data.year)) + '年の毎月の運勢</h3><table><thead><tr><th>月</th><th>干支</th><th>通変星</th><th>十二運</th><th>空亡</th></tr></thead><tbody>';
       data.monthly.forEach(m => {
         html += '<tr><td>' + escapeHtml(m.label) + '</td><td>' + escapeHtml(m.stem + m.branch) + '</td><td>' +
-          escapeHtml(m.ten_god || '') + '</td><td>' + escapeHtml(m.twelve_stage || '') + '</td></tr>';
+          escapeHtml(m.ten_god || '') + '</td><td>' + escapeHtml(m.twelve_stage || '') + '</td><td>' +
+          (kubou.has(m.branch) ? '●' : '') + '</td></tr>';
       });
       html += '</tbody></table></div>';
     }
