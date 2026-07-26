@@ -48,6 +48,7 @@ HEADER_ALIASES: dict[str, str] = {
     "出生時間": "time",
     "場所": "place",
     "出生地": "place",
+    "役職": "position",
     "MBTI": "mbti",
 }
 # ヘッダー行を右方向にスキャンする際、この個数まで空セルが続いたら
@@ -232,6 +233,7 @@ class GoogleSheetsPersonRepository:
                     place_raw = cell_at(row_cells, "place")
                     mbti_raw = cell_at(row_cells, "mbti")
                     gender_raw = cell_at(row_cells, "gender")
+                    position_raw = cell_at(row_cells, "position")
 
                     birth_date = _parse_birth_date(birth_raw)
                     birth_time, birth_time_unknown = _parse_birth_time(time_raw)
@@ -247,6 +249,7 @@ class GoogleSheetsPersonRepository:
                             birth_time_unknown=birth_time_unknown,
                             birth_prefecture=place_raw,
                             department=department,
+                            position=position_raw,
                             mbti=mbti_raw,
                             status="在籍",
                             retention=RetentionInfo(retention_policy="manual"),

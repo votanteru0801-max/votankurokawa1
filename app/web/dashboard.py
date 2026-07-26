@@ -189,8 +189,13 @@ async function loadPeople(q) {
     btnDetailed.className = 'analysis-btn';
     btnDetailed.textContent = '詳細分析';
     btnDetailed.addEventListener('click', () => runAnalysis(p.name, 'detailed'));
+    const btnFortune = document.createElement('button');
+    btnFortune.className = 'analysis-btn';
+    btnFortune.textContent = '今年の運勢';
+    btnFortune.addEventListener('click', () => runFortune(p.name));
     tr.lastElementChild.appendChild(btnSimple);
     tr.lastElementChild.appendChild(btnDetailed);
+    tr.lastElementChild.appendChild(btnFortune);
     tbody.appendChild(tr);
   });
   document.getElementById('people-count').textContent = data.people.length + '件表示中（最大300件）';
@@ -225,6 +230,63 @@ async function runAnalysis(name, mode) {
       return;
     }
     bodyEl.innerHTML = '<div class="analysis-text">' + escapeHtml(data.text) + '</div>';
+  } catch (e) {
+    bodyEl.innerHTML = '<p style="color:#c0392b">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+  }
+}
+
+function stageBadge(stage) {
+  if (!stage) { return ''; }
+  return '<span class="alert-stage">' + escapeHtml(stage) + '</span>';
+}
+
+async function runFortune(name) {
+  openModal(name + '（今年の運勢）');
+  const bodyEl = document.getElementById('modal-body');
+  try {
+    const res = await fetch('/dashboard/api/person-fortune?name=' + encodeURIComponent(name));
+    const data = await res.json();
+    if (data.error) {
+      bodyEl.innerHTML = '<p style="color:#c0392b">' + escapeHtml(data.error) + '</p>';
+      return;
+    }
+    let html = '';
+    if (data.current_major_cycle) {
+      const c = data.current_major_cycle;
+      html += '<div class="card"><h3>今の大運（' + escapeHtml(c.label) + '）' + stageBadge(c.twelve_stage) +
+        '</h3><p>' + escapeHtml(c.stem + c.branch) + (c.ten_god ? '（' + escapeHtml(c.ten_god) + '）' : '') + '</p></div>';
+    } else if (data.unavailable_reason) {
+      html += '<p class="muted">大運: ' + escapeHtml(data.unavailable_reason) + '</p>';
+    }
+    if (data.annual) {
+      const a = data.annual;
+      html += '<div class="card"><h3>' + escapeHtml(a.label) + 'の運勢' + stageBadge(a.twelve_stage) +
+        '</h3><p>' + escapeHtml(a.stem + a.branch) + (a.ten_god ? '（' + escapeHtml(a.ten_god) + '）' : '') + '</p></div>';
+    }
+    if ((data.growth_periods || []).length) {
+      html += '<div class="card"><h3>伸びどき</h3>';
+      data.growth_periods.forEach(p => {
+        html += '<p><strong>' + escapeHtml(p.label) + '</strong>' + stageBadge(p.twelve_stage) + '<br>' + escapeHtml(p.note || '') + '</p>';
+      });
+      html += '</div>';
+    }
+    if ((data.support_periods || []).length) {
+      html += '<div class="card"><h3>支えが必要な時期</h3>';
+      data.support_periods.forEach(p => {
+        html += '<p><strong>' + escapeHtml(p.label) + '</strong>' + stageBadge(p.twelve_stage) + '<br>' + escapeHtml(p.note || '') + '</p>';
+      });
+      html += '</div>';
+    }
+    if ((data.monthly || []).length) {
+      html += '<div class="card"><h3>' + escapeHtml(String(data.year)) + '年の毎月の運勢</h3><table><thead><tr><th>月</th><th>干支</th><th>通変星</th><th>十二運</th></tr></thead><tbody>';
+      data.monthly.forEach(m => {
+        html += '<tr><td>' + escapeHtml(m.label) + '</td><td>' + escapeHtml(m.stem + m.branch) + '</td><td>' +
+          escapeHtml(m.ten_god || '') + '</td><td>' + escapeHtml(m.twelve_stage || '') + '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+    html += '<div class="caveats">' + escapeHtml(data.caveat || '') + '</div>';
+    bodyEl.innerHTML = html || '<p class="muted">データがありません。</p>';
   } catch (e) {
     bodyEl.innerHTML = '<p style="color:#c0392b">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
   }
@@ -439,6 +501,26 @@ def api_analysis(
         return {"error": str(e)}
 
     return {"text": text}
+
+
+@router.get("/api/person-fortune")
+def api_person_fortune(name: str, kuroeda_dashboard_session: str | None = Cookie(default=None)) -> dict:
+    _require_auth(kuroeda_dashboard_session)
+    from app.ai.tool_executor import ToolValidationError
+    from app.services import person_fortune, person_service
+    from app.sheets.google_repository import get_person_repository
+
+    repo = get_person_repository()
+    person, candidates = person_service.resolve_person_by_name(repo, name)
+    if person is None and candidates:
+        return {"error": person_service.build_disambiguation_message(candidates)}
+    if person is None:
+        return {"error": f"「{name}」に該当する人物が見つかりませんでした。"}
+
+    try:
+        return person_fortune.build_person_fortune(person)
+    except ToolValidationError as e:
+        return {"error": str(e)}
 
 
 @router.get("/api/monthly-alerts")
