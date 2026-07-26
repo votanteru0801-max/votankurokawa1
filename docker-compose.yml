@@ -1,20 +1,10 @@
 services:
-  db:
-    image: postgres:16-alpine
+  firestore-emulator:
+    image: gcr.io/google.com/cloudsdktool/cloud-sdk:emulators
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: kuroeda
-      POSTGRES_PASSWORD: kuroeda
-      POSTGRES_DB: kuroeda
+    command: gcloud emulators firestore start --host-port=0.0.0.0:8081
     ports:
-      - "5432:5432"
-    volumes:
-      - kuroeda_pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kuroeda"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      - "8081:8081"
 
   app:
     build: .
@@ -22,16 +12,15 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+psycopg://kuroeda:kuroeda@db:5432/kuroeda
+      # ローカル開発ではFirestore本番ではなくエミュレータを使う
+      # （google-cloud-firestoreライブラリがこの環境変数を自動的に見に行く）。
+      FIRESTORE_EMULATOR_HOST: firestore-emulator:8081
+      GOOGLE_CLOUD_PROJECT: local-dev
     ports:
       - "8080:8080"
     depends_on:
-      db:
-        condition: service_healthy
+      - firestore-emulator
     volumes:
       - ./:/app
     command: >
-      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload"
-
-volumes:
-  kuroeda_pgdata:
+      sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload"

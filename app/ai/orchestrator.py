@@ -120,7 +120,8 @@ def _resolve_candidate_choice(repo: PersonRepository, candidate_ids: list[str], 
 
 
 class Orchestrator:
-    def __init__(self, db: Session, repo: PersonRepository, ai_client) -> None:
+    def __init__(self, db, repo: PersonRepository, ai_client) -> None:
+        # db は Firestoreクライアント（app.db.base.get_firestore_client()の戻り値）。
         self.db = db
         self.repo = repo
         self.ai_client = ai_client

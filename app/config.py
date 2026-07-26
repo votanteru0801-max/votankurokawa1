@@ -56,7 +56,13 @@ class Settings(BaseSettings):
     google_service_account_json: str = ""
     hr_spreadsheet_id: str = "14Qz4S4s3CGOrjFsijOvjXy542BkG3DJ3gLYzZFAXWvg"
 
-    database_url: str = "postgresql+psycopg://kuroeda:kuroeda@db:5432/kuroeda"
+    # 運用データ(会話状態・監査ログ・変更履歴等)の保存先はGoogle Firestore。
+    # 認証は google_service_account_json / google_application_credentials
+    # （Sheets連携と共用）、どちらも未設定ならADC（Cloud Run上のサービス
+    # アカウント等）を使う。詳細は app/db/base.py 参照。
+    # google_cloud_project は、ADC使用時にプロジェクトIDを自動検出できない
+    # 環境（ローカルのFirestoreエミュレータ等）向けの明示指定用。
+    google_cloud_project: str = ""
 
     calc_policy_version: str = "2026.1"
     calc_year_pillar_boundary: YearPillarBoundary = YearPillarBoundary.RISSHUN

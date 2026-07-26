@@ -145,10 +145,16 @@ class GoogleSheetsPersonRepository:
                 # Secret Files機能を使わず、環境変数にJSONの中身を直接入れている場合。
                 info = json.loads(settings.google_service_account_json)
                 credentials = service_account.Credentials.from_service_account_info(info, scopes=scopes)
-            else:
+            elif settings.google_application_credentials:
                 credentials = service_account.Credentials.from_service_account_file(
                     settings.google_application_credentials, scopes=scopes,
                 )
+            else:
+                # Cloud Run等、サービスアカウントを紐付けたGCP環境で動いている場合は
+                # ここに来る（Application Default Credentialsで自動認証）。
+                import google.auth
+
+                credentials, _ = google.auth.default(scopes=scopes)
             self._service = build("sheets", "v4", credentials=credentials)
         return self._service
 

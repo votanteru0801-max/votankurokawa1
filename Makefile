@@ -1,4 +1,4 @@
-.PHONY: up down logs test lint typecheck migrate seed rich-menu-image rich-menu-json
+.PHONY: up down logs test lint typecheck seed rich-menu-image rich-menu-json
 
 up:
 	docker compose up --build
@@ -17,9 +17,6 @@ lint:
 
 typecheck:
 	docker compose exec app mypy app
-
-migrate:
-	docker compose exec app alembic upgrade head
 
 seed:
 	docker compose exec app python scripts/seed_mock_data.py

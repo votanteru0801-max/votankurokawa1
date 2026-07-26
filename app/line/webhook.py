@@ -1,20 +1,20 @@
 """LINE Webhookエンドポイント。
 署名検証・許可ユーザー照合・イベント重複防止をここで一元的に行い、
 実処理（命式計算・AI呼び出し）はバックグラウンドタスクへ回して速やかに200を返す。
+
+イベントの重複処理防止・処理状態の記録は Firestore の "webhook_events"
+コレクションに保存する（line_event_id をそのままドキュメントIDにする）。
 """
 from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Header, Request, Response
 
 from app.auth.line_auth import UNAUTHORIZED_MESSAGE, is_allowed_user, verify_signature
 from app.config import get_settings
-from app.db.base import get_engine
-from app.db.models import WebhookEvent
-from sqlalchemy.orm import Session
 
 router = APIRouter()
 
@@ -40,80 +40,67 @@ def process_event(event: dict) -> None:
     """1件のWebhookイベントを処理する（バックグラウンドタスクから呼ばれる）。"""
     from app.ai.factory import get_ai_client
     from app.ai.orchestrator import Orchestrator
+    from app.db.base import get_firestore_client
     from app.sheets.google_repository import get_person_repository
 
-    settings = get_settings()
-    engine = get_engine()
-    with Session(engine) as db:
-        webhook_event_id = event.get("webhookEventId") or str(uuid.uuid4())
-        line_user_id = event.get("source", {}).get("userId", "")
+    db = get_firestore_client()
+    webhook_event_id = event.get("webhookEventId") or str(uuid.uuid4())
+    line_user_id = event.get("source", {}).get("userId", "")
 
-        db_event = db.query(WebhookEvent).filter_by(line_event_id=webhook_event_id).one_or_none()
-        if db_event is None:
-            db_event = WebhookEvent(
-                id=uuid.uuid4(),
-                line_event_id=webhook_event_id,
-                line_user_id=line_user_id,
-                event_type=event.get("type", "unknown"),
-                raw_payload=event,
-                received_at=datetime.utcnow(),
-                status="processing",
-            )
-            db.add(db_event)
-            db.commit()
-        elif db_event.status == "done":
+    event_ref = db.collection("webhook_events").document(webhook_event_id)
+    snapshot = event_ref.get()
+    if snapshot.exists:
+        if (snapshot.to_dict() or {}).get("status") == "done":
             return  # 二重処理防止
+    else:
+        event_ref.set(
+            {
+                "line_event_id": webhook_event_id,
+                "line_user_id": line_user_id,
+                "event_type": event.get("type", "unknown"),
+                "raw_payload": event,
+                "received_at": datetime.now(timezone.utc),
+                "processed_at": None,
+                "status": "processing",
+                "error_message": None,
+            }
+        )
 
-        try:
-            if not is_allowed_user(line_user_id):
-                _reply_or_log(line_user_id, [UNAUTHORIZED_MESSAGE])
-                db_event.status = "done"
-                db_event.processed_at = datetime.utcnow()
-                db.add(db_event)
-                db.commit()
-                return
+    try:
+        if not is_allowed_user(line_user_id):
+            _reply_or_log(line_user_id, [UNAUTHORIZED_MESSAGE])
+            event_ref.update({"status": "done", "processed_at": datetime.now(timezone.utc)})
+            return
 
-            if event.get("type") != "message" or event.get("message", {}).get("type") != "text":
-                db_event.status = "done"
-                db_event.processed_at = datetime.utcnow()
-                db.add(db_event)
-                db.commit()
-                return
+        if event.get("type") != "message" or event.get("message", {}).get("type") != "text":
+            event_ref.update({"status": "done", "processed_at": datetime.now(timezone.utc)})
+            return
 
-            text = event["message"]["text"]
-            repo = get_person_repository()
-            ai_client = get_ai_client()
-            orchestrator = Orchestrator(db, repo, ai_client)
-            reply_texts = orchestrator.handle_message(line_user_id, text, webhook_event_id)
-            _reply_or_log(line_user_id, reply_texts)
+        text = event["message"]["text"]
+        repo = get_person_repository()
+        ai_client = get_ai_client()
+        orchestrator = Orchestrator(db, repo, ai_client)
+        reply_texts = orchestrator.handle_message(line_user_id, text, webhook_event_id)
+        _reply_or_log(line_user_id, reply_texts)
 
-            db_event.status = "done"
-            db_event.processed_at = datetime.utcnow()
-            db.add(db_event)
-            db.commit()
-        except Exception as e:  # noqa: BLE001 内部エラーはユーザーに詳細を見せない
-            import traceback
+        event_ref.update({"status": "done", "processed_at": datetime.now(timezone.utc)})
+    except Exception as e:  # noqa: BLE001 内部エラーはユーザーに詳細を見せない
+        import traceback
 
-            from app.services.audit_service import log_error
-            from app.sheets.google_repository import SheetsWriteNotSupportedError
+        from app.services.audit_service import log_error
+        from app.sheets.google_repository import SheetsWriteNotSupportedError
 
-            # 一時的な調査用: Renderのログ画面でも原因を追えるよう標準出力にも出す。
-            print(f"[ERROR] webhook processing failed: {type(e).__name__}: {e}")
-            traceback.print_exc()
+        # 一時的な調査用: Renderのログ画面でも原因を追えるよう標準出力にも出す。
+        print(f"[ERROR] webhook processing failed: {type(e).__name__}: {e}")
+        traceback.print_exc()
 
-            # 直前の例外でセッションが「ロールバック待ち」状態になっている場合があるため、
-            # エラー記録の前に必ずロールバックしてセッションを使える状態に戻す。
-            db.rollback()
-            log_error(db, component="webhook", error_type=type(e).__name__, message=str(e), line_user_id=line_user_id)
-            db_event.status = "error"
-            db_event.error_message = str(e)
-            db.add(db_event)
-            db.commit()
-            if isinstance(e, SheetsWriteNotSupportedError):
-                user_message = str(e)
-            else:
-                user_message = "処理中にエラーが発生しました。時間をおいて再度お試しください。"
-            _reply_or_log(line_user_id, [user_message])
+        log_error(db, component="webhook", error_type=type(e).__name__, message=str(e), line_user_id=line_user_id)
+        event_ref.update({"status": "error", "error_message": str(e)})
+        if isinstance(e, SheetsWriteNotSupportedError):
+            user_message = str(e)
+        else:
+            user_message = "処理中にエラーが発生しました。時間をおいて再度お試しください。"
+        _reply_or_log(line_user_id, [user_message])
 
 
 @router.post("/webhook")

@@ -1,11 +1,9 @@
 """pytest共通フィクスチャ。
 
-DBを使うテストはPostgreSQL（docker-compose上のkuroeda-db、またはCIのPostgres
-サービスコンテナ）を前提とする。app/db/models.py がPostgreSQL固有の型
-（JSONB等）を使用しているため、SQLiteでは代替できない。
+運用データの保存先はGoogle Firestore。テストではFirestoreエミュレータ
+（docker-compose.test.ymlが用意する firestore-emulator コンテナ）を使う。
 ローカル実行手順:
-    docker compose up -d db
-    alembic upgrade head
+    docker compose -f docker-compose.yml -f docker-compose.test.yml up -d firestore-emulator
     pytest
 """
 from __future__ import annotations
@@ -19,41 +17,38 @@ os.environ.setdefault("GOOGLE_SHEETS_MODE", "mock")
 os.environ.setdefault("ANTHROPIC_MODE", "mock")
 os.environ.setdefault("ALLOWED_LINE_USER_ID", "Uauthorizeduser0000000000000000")
 os.environ.setdefault(
-    "DATABASE_URL",
-    os.environ.get("TEST_DATABASE_URL", "postgresql+psycopg://kuroeda:kuroeda@localhost:5432/kuroeda_test"),
+    "FIRESTORE_EMULATOR_HOST", os.environ.get("TEST_FIRESTORE_EMULATOR_HOST", "localhost:8082")
 )
+os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "test-project")
 os.environ.setdefault("LINE_CHANNEL_SECRET", "test-channel-secret")
+
+_CLEARED_COLLECTIONS = (
+    "conversation_states",
+    "webhook_events",
+    "change_history",
+    "ai_request_log",
+    "error_log",
+)
 
 
 @pytest.fixture(scope="session")
 def db_engine():
-    from sqlalchemy import create_engine
-
     from app.config import get_settings
-    from app.db.base import Base
+    from app.db.base import get_firestore_client
 
     get_settings.cache_clear()
-    engine = create_engine(get_settings().database_url, future=True)
-    Base.metadata.create_all(engine)
-    yield engine
-    Base.metadata.drop_all(engine)
+    client = get_firestore_client()
+    yield client
 
 
 @pytest.fixture()
 def db_session(db_engine):
-    from sqlalchemy.orm import sessionmaker
-
-    session_factory = sessionmaker(bind=db_engine, future=True)
-    session = session_factory()
-    yield session
-    session.rollback()
-    # テスト間の独立性を保つため主要テーブルをクリアする
-    from app.db import models
-
-    for table in reversed(models.Base.metadata.sorted_tables):
-        session.execute(table.delete())
-    session.commit()
-    session.close()
+    yield db_engine
+    # テスト間の独立性を保つため、このテストで使ったコレクションをクリアする
+    # （Firestoreエミュレータは自動リセットされないため）。
+    for collection_name in _CLEARED_COLLECTIONS:
+        for doc in db_engine.collection(collection_name).stream():
+            doc.reference.delete()
 
 
 @pytest.fixture()

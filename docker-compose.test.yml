@@ -1,8 +1,11 @@
-# テスト用: docker compose -f docker-compose.yml -f docker-compose.test.yml up -d db
-# その後 alembic upgrade head && pytest を実行する。
+# テスト用: docker compose -f docker-compose.yml -f docker-compose.test.yml up -d firestore-emulator
+# その後 pytest を実行する（開発用エミュレータとポートを分けて、データが混ざらないようにする）。
 services:
-  db:
-    environment:
-      POSTGRES_DB: kuroeda_test
+  firestore-emulator:
+    command: gcloud emulators firestore start --host-port=0.0.0.0:8082
     ports:
-      - "5433:5432"
+      - "8082:8082"
+
+  app:
+    environment:
+      FIRESTORE_EMULATOR_HOST: firestore-emulator:8082

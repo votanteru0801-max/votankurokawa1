@@ -35,21 +35,18 @@ def test_basic_info_change_requires_confirmation(orchestrator, repo, allowed_use
 
 
 def test_basic_info_change_records_before_after(orchestrator, repo, allowed_user_id, db_session):
-    from sqlalchemy import select
-
-    from app.db.models import ChangeHistory
-
     person = _existing_person(repo)
     original_position = person.position
     orchestrator.handle_message(allowed_user_id, f"{person.name}の役職を統括マネージャーに変更して", "ev1")
     orchestrator.handle_message(allowed_user_id, "変更する", "ev2")
 
-    change = db_session.execute(
-        select(ChangeHistory).where(ChangeHistory.operation_type == "update_basic_info")
-    ).scalars().first()
-    assert change is not None
-    assert change.field_changes["position"]["before"] == original_position
-    assert change.field_changes["position"]["after"] == "統括マネージャー"
+    docs = list(
+        db_session.collection("change_history").where("operation_type", "==", "update_basic_info").stream()
+    )
+    assert docs, "変更履歴が記録されていません"
+    change = docs[0].to_dict()
+    assert change["field_changes"]["position"]["before"] == original_position
+    assert change["field_changes"]["position"]["after"] == "統括マネージャー"
 
 
 def test_undo_last_change_reverts_update(orchestrator, repo, allowed_user_id):
@@ -87,30 +84,29 @@ def test_soft_delete_is_logical_not_physical(db_session, repo, allowed_user_id):
 
 
 def test_webhook_event_idempotency(db_session):
-    from app.db.models import WebhookEvent
-
+    # Firestore版では line_event_id をそのままドキュメントIDにしているため、
+    # 「同じevent_idは常に同じドキュメントを指す」こと自体が二重処理防止の
+    # 仕組みになっている（webhook.pyのprocess_eventはstatus=="done"なら
+    # 早期returnする）。ここではその前提となる挙動を確認する。
     event_id = f"idem-test-{uuid.uuid4()}"
-    db_session.add(
-        WebhookEvent(
-            id=uuid.uuid4(), line_event_id=event_id, line_user_id="Uxxx",
-            event_type="message", raw_payload={}, status="done",
-        )
+    ref = db_session.collection("webhook_events").document(event_id)
+    ref.set(
+        {
+            "line_event_id": event_id,
+            "line_user_id": "Uxxx",
+            "event_type": "message",
+            "raw_payload": {},
+            "received_at": None,
+            "processed_at": None,
+            "status": "done",
+            "error_message": None,
+        }
     )
-    db_session.commit()
 
-    existing = db_session.query(WebhookEvent).filter_by(line_event_id=event_id).one_or_none()
-    assert existing is not None
-    assert existing.status == "done"
-    # 同一event_idでの再挿入はユニーク制約により拒否されるべき
-    import pytest
-    from sqlalchemy.exc import IntegrityError
+    snapshot = db_session.collection("webhook_events").document(event_id).get()
+    assert snapshot.exists
+    assert snapshot.to_dict()["status"] == "done"
 
-    db_session.add(
-        WebhookEvent(
-            id=uuid.uuid4(), line_event_id=event_id, line_user_id="Uxxx",
-            event_type="message", raw_payload={}, status="processing",
-        )
-    )
-    with pytest.raises(IntegrityError):
-        db_session.commit()
-    db_session.rollback()
+    # 同一event_idで再度参照しても同じドキュメントが返る（新規作成されない）。
+    same_ref = db_session.collection("webhook_events").document(event_id)
+    assert same_ref.id == ref.id

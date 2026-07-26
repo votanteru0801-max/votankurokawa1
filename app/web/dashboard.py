@@ -24,9 +24,8 @@ from pydantic import BaseModel
 
 from app.ai.client_interface import AnalysisGenerationError
 from app.config import get_settings
-from app.db.base import get_engine
+from app.db.base import get_firestore_client
 from app.services import audit_service
-from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/dashboard")
 
@@ -391,16 +390,15 @@ def api_team_recommendation(
     except AnalysisGenerationError as e:
         return {"error": f"候補の選定に失敗しました。時間をおいて再度お試しください。（{e}）"}
 
-    engine = get_engine()
-    with Session(engine) as db:
-        audit_service.log_ai_request(
-            db,
-            f"web:{settings.allowed_line_user_id}",
-            intent="team_recommendation_web",
-            tool_calls={"recommend_team": 2},
-            data_sent_summary={"criteria": body.criteria},
-            model=settings.anthropic_model,
-        )
+    db = get_firestore_client()
+    audit_service.log_ai_request(
+        db,
+        f"web:{settings.allowed_line_user_id}",
+        intent="team_recommendation_web",
+        tool_calls={"recommend_team": 2},
+        data_sent_summary={"criteria": body.criteria},
+        model=settings.anthropic_model,
+    )
 
     return {
         "criteria": resp.criteria,
@@ -432,14 +430,13 @@ def api_analysis(
     ai_client = get_ai_client()
     actor_id = f"web:{settings.allowed_line_user_id}"
     label = "詳細分析" if mode == "detailed" else "簡易分析"
-    engine = get_engine()
-    with Session(engine) as db:
-        try:
-            text = analysis_service.run_analysis_for_person(
-                db, repo, ai_client, actor_id, person, f"{person.name}の{label}", mode
-            )
-        except analysis_service.AnalysisError as e:
-            return {"error": str(e)}
+    db = get_firestore_client()
+    try:
+        text = analysis_service.run_analysis_for_person(
+            db, repo, ai_client, actor_id, person, f"{person.name}の{label}", mode
+        )
+    except analysis_service.AnalysisError as e:
+        return {"error": str(e)}
 
     return {"text": text}
 
