@@ -224,7 +224,7 @@ async function loadPeople(q) {
     btnDetailed.addEventListener('click', () => runAnalysis(p.name, 'detailed'));
     const btnFortune = document.createElement('button');
     btnFortune.className = 'analysis-btn';
-    btnFortune.textContent = '今年の運勢';
+    btnFortune.textContent = '今年・来年の運勢';
     btnFortune.addEventListener('click', () => runFortune(p.name));
     tr.lastElementChild.appendChild(btnSimple);
     tr.lastElementChild.appendChild(btnDetailed);
@@ -278,7 +278,7 @@ function nl2br(s) {
 }
 
 async function runFortune(name) {
-  openModal(name + '（今年の運勢）');
+  openModal(name + '（今年・来年の運勢）');
   const bodyEl = document.getElementById('modal-body');
   try {
     const res = await fetch('/dashboard/api/person-fortune?name=' + encodeURIComponent(name));
@@ -295,11 +295,10 @@ async function runFortune(name) {
     } else if (data.unavailable_reason) {
       html += '<p class="muted">大運: ' + escapeHtml(data.unavailable_reason) + '</p>';
     }
-    if (data.annual) {
-      const a = data.annual;
+    (data.annual || []).forEach(a => {
       html += '<div class="card"><h3>' + escapeHtml(a.label) + 'の運勢' + stageBadge(a.twelve_stage) +
         '</h3><p>' + escapeHtml(a.stem + a.branch) + (a.ten_god ? '（' + escapeHtml(a.ten_god) + '）' : '') + '</p></div>';
-    }
+    });
     if ((data.kubou_branches || []).length) {
       html += '<p class="muted">天中殺（空亡）の地支: ' + escapeHtml(data.kubou_branches.join('・')) + '</p>';
     }
@@ -319,7 +318,8 @@ async function runFortune(name) {
     }
     if ((data.monthly || []).length) {
       const kubou = new Set(data.kubou_branches || []);
-      html += '<div class="card"><h3>' + escapeHtml(String(data.year)) + '年の毎月の運勢</h3><table><thead><tr><th>月</th><th>干支</th><th>通変星</th><th>十二運</th><th>空亡</th></tr></thead><tbody>';
+      const yearsLabel = (data.years_covered || [data.year]).join('・') + '年';
+      html += '<div class="card"><h3>' + escapeHtml(yearsLabel) + 'の毎月の運勢</h3><table><thead><tr><th>月</th><th>干支</th><th>通変星</th><th>十二運</th><th>空亡</th></tr></thead><tbody>';
       data.monthly.forEach(m => {
         html += '<tr><td>' + escapeHtml(m.label) + '</td><td>' + escapeHtml(m.stem + m.branch) + '</td><td>' +
           escapeHtml(m.ten_god || '') + '</td><td>' + escapeHtml(m.twelve_stage || '') + '</td><td>' +

@@ -1,19 +1,18 @@
-"""個人ごとの「今年の大運・毎月の運勢・伸びどき・支えが必要な時期」を
+"""個人ごとの「今年・来年の大運/運勢・伸びどき・支えが必要な時期」を
 機械的（AIを使わず決定論的な命式計算エンジンのみ）に算出するロジック。
 
-app/services/monthly_alert.py と同じ方針で、古典命理学の十二運
-（長生・沐浴・冠帯・建禄・帝旺・衰・病・死・墓・絶・胎・養）のうち、
-伝統的に勢いが強いとされる4つ（長生・冠帯・建禄・帝旺）を「伸びどき」、
-気力・活力が下がりやすいとされる4つ（病・死・墓・絶）を「支えが必要な
-時期」として分類する。残り4つ（沐浴・衰・胎・養）はどちらにも分類しない
-（占術上の解釈が割れやすいため、断定的な分類を避ける）。
+対象期間は今年と来年の2年分（年運・毎月の運勢とも）。
 
-これに加えて、算命学側の天中殺（空亡）にあたる月・年も「支えが必要な時期」
-として扱う（ユーザー要望・2026-07-26）。天中殺は日柱から決まる2つの地支
-（app/calculation/sanmeigaku.py の tenchuusatsu）で、その地支にあたる
-年・月は物事が空転しやすい時期とされる。十二運が「伸びどき」に該当する
-月であっても天中殺と重なる場合は、その旨を注記に加える（伸びどき自体の
-分類は変えない）。
+「伸びどき」は古典命理学の十二運（長生・沐浴・冠帯・建禄・帝旺・衰・病・
+死・墓・絶・胎・養）のうち、伝統的に勢いが強いとされる4つ
+（長生・冠帯・建禄・帝旺）に該当する年・月とする。
+
+「支えが必要な時期」は、ユーザー要望（2026-07-26）によりシンプルな2条件に
+絞っている。
+1. 十二運が「絶」にあたる年・月（気力の波が大きくなりやすいとされる）
+2. 算命学側の天中殺（空亡）にあたる年・月（app/calculation/sanmeigaku.py の
+   tenchuusatsu。日柱から決まる2つの地支で、物事が空転しやすいとされる時期）
+（病・死・墓は対象外。以前は含めていたが、通知が多すぎるとの理由で除外した）
 
 重要: これはあくまで占術上の目安であり、実際の体調やパフォーマンスを
 保証するものではない。人事上の判断にこの結果だけを使わないこと
@@ -31,7 +30,7 @@ from app.calculation.schemas import LuckCycleEntry
 from app.schemas.person import Person
 
 GROWTH_STAGES = {"長生", "冠帯", "建禄", "帝旺"}
-SUPPORT_STAGES = {"病", "死", "墓", "絶"}
+SUPPORT_STAGES = {"絶"}  # ユーザー要望により「絶」のみ（病・死・墓は対象外）
 
 _GROWTH_NOTES = {
     "長生": "十二運が「長生」の時期です。新しいことを始めたり、力を伸ばすのに向いているとされています。",
@@ -40,9 +39,6 @@ _GROWTH_NOTES = {
     "帝旺": "十二運が「帝旺」の時期です。最も勢いが強く、力を発揮しやすいとされる時期です。",
 }
 _SUPPORT_NOTES = {
-    "病": "十二運が「病」の時期です。無理をしがちな時期とされ、体調面への配慮が必要とされています。",
-    "死": "十二運が「死」の時期です。気力が落ちやすく、ケアレスミスに注意が必要とされる時期です。",
-    "墓": "十二運が「墓」の時期です。表面化しにくい疲れが溜まりやすいとされる時期です。",
     "絶": "十二運が「絶」の時期です。気力の波が大きくなりやすいとされる時期です。",
 }
 _KUBOU_NOTE_TEMPLATE = (
@@ -54,6 +50,8 @@ CAVEAT = (
     "これは命式上の目安であり、実際の体調・モチベーション・成果を保証するものではありません。"
     "採用・配置・評価などの判断にこの結果だけを使わず、必ず本人の状況を確認してください。"
 )
+
+YEARS_AHEAD = 2  # 今年・来年の2年分
 
 
 def _classify(entry: LuckCycleEntry, kubou_branches: set[str]) -> tuple[str | None, list[str]]:
@@ -89,7 +87,7 @@ def _entry_dict(e: LuckCycleEntry | None, note: str | None = None) -> dict | Non
 
 
 def build_person_fortune(person: Person, target: date | None = None) -> dict:
-    """指定人物の今年・毎月の運勢一覧と伸びどき/支えが必要な時期をまとめて返す。
+    """指定人物の今年・来年の運勢一覧と伸びどき/支えが必要な時期をまとめて返す。
 
     生年月日が未登録の場合や性別未登録で大運の順逆が判定できない場合は、
     該当項目を None のまま返す（呼び出し側でその旨を表示する）。
@@ -101,7 +99,7 @@ def build_person_fortune(person: Person, target: date | None = None) -> dict:
         birth,
         DEFAULT_POLICY,
         annual_start_year=target.year,
-        annual_count=1,
+        annual_count=YEARS_AHEAD,
         monthly_target=date(target.year, target.month, 1),
     )
 
@@ -113,42 +111,40 @@ def build_person_fortune(person: Person, target: date | None = None) -> dict:
             current_major = cyc
             break
 
-    annual = result.luck_cycles.annual_cycles[0] if result.luck_cycles.annual_cycles else None
+    annual_list: list[LuckCycleEntry] = list(result.luck_cycles.annual_cycles)
 
     months: list[LuckCycleEntry] = []
-    for m in range(1, 13):
-        try:
-            months.append(calculate_monthly_cycle(result.shichuu_suimei, DEFAULT_POLICY, date(target.year, m, 1)))
-        except Exception:
-            continue
+    for year in range(target.year, target.year + YEARS_AHEAD):
+        for m in range(1, 13):
+            try:
+                months.append(calculate_monthly_cycle(result.shichuu_suimei, DEFAULT_POLICY, date(year, m, 1)))
+            except Exception:
+                continue
 
     growth_periods: list[dict] = []
     support_periods: list[dict] = []
 
-    if annual is not None:
-        kind, notes = _classify(annual, kubou_branches)
-        entry = _entry_dict(annual, "\n".join(notes) if notes else None)
-        if kind == "growth":
-            growth_periods.append(entry)
-        elif kind == "support":
-            support_periods.append(entry)
+    for a in annual_list:
+        kind, notes = _classify(a, kubou_branches)
+        if kind is None:
+            continue
+        entry = _entry_dict(a, "\n".join(notes))
+        (growth_periods if kind == "growth" else support_periods).append(entry)
 
     for m in months:
         kind, notes = _classify(m, kubou_branches)
         if kind is None:
             continue
         entry = _entry_dict(m, "\n".join(notes))
-        if kind == "growth":
-            growth_periods.append(entry)
-        else:
-            support_periods.append(entry)
+        (growth_periods if kind == "growth" else support_periods).append(entry)
 
     return {
         "year": target.year,
+        "years_covered": [target.year + i for i in range(YEARS_AHEAD)],
         "direction": result.luck_cycles.direction,
         "unavailable_reason": result.luck_cycles.unavailable_reason,
         "current_major_cycle": _entry_dict(current_major),
-        "annual": _entry_dict(annual),
+        "annual": [_entry_dict(a) for a in annual_list],
         "monthly": [_entry_dict(m) for m in months],
         "kubou_branches": sorted(kubou_branches),
         "growth_periods": growth_periods,
