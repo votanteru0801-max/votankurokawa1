@@ -8,9 +8,11 @@ function renderDashboard(rawMembers, opts){
   const result = opts.result || null;
   const candidateName = opts.candidateName || '';
   const candidateBirth = opts.candidateBirth || '';
+  const candidateTime = opts.candidateTime || '';
+  const candidateRole = opts.candidateRole || '';
   const candidateResult = opts.candidateResult || null;
 
-  const withMeishiki = rawMembers.map(m => ({ ...m, meishiki: calc.computeMeishiki(m.birth) }));
+  const withMeishiki = rawMembers.map(m => ({ ...m, meishiki: calc.computeMeishiki(m.birth, m.time) }));
 
   // 所属（店舗）ごとにグループ化
   const groups = {};
@@ -98,10 +100,12 @@ function renderDashboard(rawMembers, opts){
 
   <section>
     <h2>採用候補者チェック（中途・新卒）</h2>
-    <p class="count">まだ登録していない候補者の氏名・生年月日を入力すると、既存メンバーとの相性・チームへの入り方の傾向を確認できます。</p>
+    <p class="count">まだ登録していない候補者の氏名・生年月日を入力すると、既存メンバーとの相性・チームへの入り方の傾向を確認できます。生まれた時間・想定役職は分かれば入力してください（任意項目）。</p>
     <form class="search" method="get" action="/">
       <input type="text" name="cname" placeholder="候補者氏名" value="${esc(candidateName)}">
       <input type="date" name="cbirth" value="${esc(candidateBirth)}">
+      <input type="text" name="ctime" placeholder="生まれた時間（例：14:30／任意）" value="${esc(candidateTime)}">
+      <input type="text" name="crole" placeholder="想定役職（例：スタイリスト／任意）" value="${esc(candidateRole)}">
       <button type="submit">候補者を分析</button>
     </form>
     ${candidateResult ? `<div class="result">${esc(candidateResult)}</div>` : ''}

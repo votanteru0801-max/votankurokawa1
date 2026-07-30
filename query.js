@@ -4,24 +4,14 @@ function findByName(members, text){
   return members.filter(m => text.includes(m.name) || text.includes(m.name.replace(/\s/g,'')));
 }
 
-function parseYearKeyword(text){
-  const now = new Date().getFullYear();
-  if(text.includes('再来年')) return now + 2;
-  if(text.includes('来年')) return now + 1;
-  if(text.includes('今年')) return now;
-  const m = text.match(/(20\d{2})年/);
-  if(m) return Number(m[1]);
-  return null;
-}
-
-function replyDetail(m, targetYear){
+function replyDetail(m){
   const narrative = calc.personTypeNarrative(m);
   const hint = calc.handlingHint(m);
   const q = calc.suggestedQuestions(m);
-  const deep = calc.deepManagementReport(m, targetYear);
   const domain = calc.replyDomainProfile(m);
+  const role = calc.roleStrengthText(m, m.role);
   let note = m.note ? `\n\n【面談メモ】\n${m.note}` : '';
-  return `■${m.name}さん（${m.group || '—'}）の詳細分析\n\n${narrative}\n\n${hint}\n\n${q}\n\n${domain}\n\n${deep}${note}`;
+  return `■${m.name}さん（${m.group || '—'}${m.role ? '／'+m.role : ''}）の詳細分析\n\n${narrative}\n\n${hint}\n\n${q}\n\n${domain}${role ? '\n'+role : ''}${note}`;
 }
 
 function replyCompat(mA, mB){
@@ -43,24 +33,17 @@ function replyTeam(list){
       out += `・${r.headline}\n`;
     }
   }
-  out += `\n【業務適性】\n`;
-  list.forEach(m => { out += `・${m.name}：${calc.domainProfile(m).ranked.filter(([,s])=>s>0).map(([d])=>d).slice(0,2).join('／') || '該当なし'}\n`; });
   out += `\n※あくまで五行理論・命式に基づく簡易分析です。実際のアサインは本人のスキル・希望を優先し、対話の参考としてご活用ください。`;
   return out;
 }
 
 function resolveQuery(text, rawMembers){
-  const members = rawMembers.map(m => ({ ...m, meishiki: calc.computeMeishiki(m.birth) }));
+  const members = rawMembers.map(m => ({ ...m, meishiki: calc.computeMeishiki(m.birth, m.time) }));
   const found = findByName(members, text);
-  const targetYear = parseYearKeyword(text);
   const wantsSynergy = text.includes('相乗効果') || text.includes('シナジー');
-  const matchedDomain = calc.ALL_DOMAINS.find(d => text.includes(d.replace('を上げる','')));
 
   if(found.length === 1 && wantsSynergy){
     return calc.replySynergySearch(found[0], members);
-  }
-  if(found.length === 0 && matchedDomain){
-    return calc.replyDomainRanking(matchedDomain, members);
   }
   if(found.length >= 3){
     return replyTeam(found);
@@ -69,7 +52,7 @@ function resolveQuery(text, rawMembers){
     return replyCompat(found[0], found[1]);
   }
   if(found.length === 1){
-    return replyDetail(found[0], targetYear);
+    return replyDetail(found[0]);
   }
   return null;
 }
@@ -78,8 +61,9 @@ function replyCandidate(candidate, allMembers){
   const narrative = calc.personTypeNarrative(candidate);
   const hint = calc.handlingHint(candidate);
   const domain = calc.replyDomainProfile(candidate);
+  const role = calc.roleStrengthText(candidate, candidate.role);
   const synergy = calc.replySynergySearch(candidate, allMembers);
-  return `■候補者：${candidate.name}さんの分析\n\n${narrative}\n\n${hint}\n\n${domain}\n\n${synergy}`;
+  return `■候補者：${candidate.name}さんの分析\n\n${narrative}\n\n${hint}\n\n${domain}${role ? '\n'+role+'\n' : ''}\n${synergy}`;
 }
 
 module.exports = { resolveQuery, findByName, replyCandidate };
