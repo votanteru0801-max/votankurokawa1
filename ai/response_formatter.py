@@ -43,6 +43,8 @@ def format_detailed_analysis(resp: DetailedAnalysisResponse) -> str:
         parts.append(f"■弱み・注意点\n{_points(resp.weaknesses)}")
     if resp.growth_guidance:
         parts.append(f"■伸ばし方・伸び方\n{_points(resp.growth_guidance)}")
+    if resp.risk_notes:
+        parts.append(f"■注意すべきミス・すれ違いリスク\n{_points(resp.risk_notes)}")
     if resp.suitable_roles:
         parts.append(f"■向いている役割\n{_points(resp.suitable_roles)}")
     if resp.current_major_luck:

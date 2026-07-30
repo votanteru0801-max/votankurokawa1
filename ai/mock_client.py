@@ -89,6 +89,9 @@ class MockAIClient:
             growth_guidance=[
                 LabeledPoint(label=Label.AI_HYPOTHESIS, text="モック応答のため伸ばし方の提案は簡略化されています。")
             ],
+            risk_notes=[
+                LabeledPoint(label=Label.AI_HYPOTHESIS, text="モック応答のためミス傾向・すれ違いリスクの分析は簡略化されています。")
+            ],
             suitable_roles=[LabeledPoint(label=Label.AI_HYPOTHESIS, text="実運用でより具体的な役割提案が生成されます。")],
             current_major_luck=str(calculation_data.get("luck_cycles", {}).get("direction", "")),
             current_annual_luck="",

@@ -115,7 +115,7 @@ class GroqAIClient:
         detail_instruction = ""
         if mode == "detailed":
             detail_instruction = (
-                "重要（詳細分析の粒度）: strengths/weaknesses/growth_guidance/suitable_roles/"
+                "重要（詳細分析の粒度）: strengths/weaknesses/growth_guidance/risk_notes/suitable_roles/"
                 "approach_and_communication/hr_proposals等の各項目は、命式のどの要素（十干・十二支・"
                 "十二運・通変星・大運や年運など）が根拠かを具体的に示しながら、1項目につき2〜4文程度で"
                 "掘り下げて記述してください。表面的な一般論ではなく、この人物固有の命式データに"
@@ -152,7 +152,10 @@ class GroqAIClient:
             "weaknesses/cautions（弱み・注意点）は、大運・年運・十二運などに際立った弱みの兆候が"
             "明確に見当たる場合のみ記入し、そうでなければ無理に弱みを作り出さず空のままにしてください。"
             "growth_guidanceには、強みや伸びどき（十二運が長生・冠帯・建禄・帝旺にあたる時期）を踏まえた、"
-            "この人物の具体的な伸ばし方・関わり方を記入してください。\n"
+            "この人物の具体的な伸ばし方・関わり方を記入してください。"
+            "risk_notesには、この人物が業務上起こしやすいミス・エラーの傾向や、"
+            "他のスタッフとの間で衝突・すれ違いが起きやすい傾向を、命式上の根拠とともに具体的に"
+            "記入してください（根拠が乏しければ無理に作り出さず空のままでよい）。\n"
             + detail_instruction + kubou_instruction +
             "submit_analysisツールを使って回答を構造化して提出してください。"
         )

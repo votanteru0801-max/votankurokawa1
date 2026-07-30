@@ -87,6 +87,16 @@ class DetailedAnalysisResponse(BaseModel):
             "どのように任せる・関わると伸びやすいかを具体的に、可能であれば1〜3件含めてください。"
         ),
     )
+    risk_notes: list[LabeledPoint] = Field(
+        default_factory=list,
+        description=(
+            "この人物が業務上どのようなミス・エラーを起こしやすいか（命式・十二運・通変星等から"
+            "読み取れる傾向として）、また特にスタッフ間でどのような衝突・すれ違いが起きやすいかを、"
+            "根拠とともに具体的に記載してください。命式上、他のスタッフとの間で摩擦・すれ違いが"
+            "起きやすいと考えられる人物については、その傾向をできるだけ具体的に示してください。"
+            "明確な根拠が無い場合は、無理に作り出さず空のリストのままにしてください。"
+        ),
+    )
     suitable_roles: list[LabeledPoint] = Field(default_factory=list)
     current_major_luck: str = ""
     current_annual_luck: str = ""
