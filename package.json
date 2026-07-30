@@ -1,15 +1,12 @@
 {
-  "name": "meishiki-linebot",
-  "version": "1.0.0",
-  "description": "命式（四柱推命・算命学）に基づくメンバー分析LINE Bot",
+  "name": "meishiki-dashboard",
+  "version": "2.0.0",
+  "description": "命式（四柱推命・算命学）に基づくメンバー分析ダッシュボード",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "@line/bot-sdk": "^9.4.2",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "node-cron": "^3.0.3"
+    "express": "^4.19.2"
   }
 }
