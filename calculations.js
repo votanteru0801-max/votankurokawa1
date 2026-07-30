@@ -23,9 +23,8 @@ const KAN_TRAITS = {
 };
 
 function kanGogyoIdx(kanIdx){ return Math.floor(kanIdx/2); }
-function kanYinYang(kanIdx){ return kanIdx % 2; } // 0=陽 1=陰
+function kanYinYang(kanIdx){ return kanIdx % 2; }
 
-// 通変星（四柱推命）／十大主星（算命学）: 算出方法は同一、名称のみ異なる
 const JUSSHIN_TABLE = {0:['比肩','劫財'],1:['食神','傷官'],2:['偏財','正財'],3:['偏官','正官'],4:['偏印','印綬']};
 const SANMEI_STAR_TABLE = {0:['貫索星','石門星'],1:['鳳閣星','調舒星'],2:['禄存星','司禄星'],3:['車騎星','牽牛星'],4:['龍高星','玉堂星']};
 const STAR_MEANING = {
@@ -51,8 +50,7 @@ function tsuuhensei(dayKanIdx, targetKanIdx){
   };
 }
 
-// ---- 十二運（四柱推命）／十二大従星（算命学） ----
-const CHOSEI_START = {0:11,1:6,2:2,3:9,4:2,5:9,6:5,7:0,8:8,9:3}; // 各日干の「長生」開始地支index
+const CHOSEI_START = {0:11,1:6,2:2,3:9,4:2,5:9,6:5,7:0,8:8,9:3};
 const STAGE_NAMES = ['長生','沐浴','冠帯','建禄','帝旺','衰','病','死','墓','絶','胎','養'];
 const SANMEI_JUUNI_NAMES = ['天貴星','天洸星','天南星','天禄星','天将星','天堂星','天胡星','天極星','天庫星','天馳星','天報星','天印星'];
 const STAGE_MEANING = {
@@ -72,13 +70,12 @@ const STAGE_MEANING = {
 
 function juuniun(dayKanIdx, targetShiIdx){
   const start = CHOSEI_START[dayKanIdx];
-  const forward = kanYinYang(dayKanIdx) === 0; // 陽干=順行 陰干=逆行
+  const forward = kanYinYang(dayKanIdx) === 0;
   const diff = forward ? ((targetShiIdx - start) % 12 + 12) % 12 : ((start - targetShiIdx) % 12 + 12) % 12;
   return { stage: STAGE_NAMES[diff], sanmei: SANMEI_JUUNI_NAMES[diff] };
 }
 
-// ---- 干支暦の基礎計算 ----
-const DAY_EPOCH = Date.UTC(1873,0,12); // 甲子日
+const DAY_EPOCH = Date.UTC(1873,0,12);
 function dayGanZhiIndex(y,m,d){
   const t = Date.UTC(y, m-1, d);
   const days = Math.floor((t - DAY_EPOCH) / 86400000);
@@ -125,11 +122,9 @@ function computeMeishiki(birthStr){
 function pillarStr(p){ return KAN[p.kanIdx] + SHI[p.shiIdx]; }
 function gogyoOf(kanIdx){ return GOGYO_NAMES[kanGogyoIdx(kanIdx)]; }
 
-// ---- 空亡（旬空／算命学でいう天中殺の日柱ベース版） ----
 const VOID_TABLE = [[10,11],[8,9],[6,7],[4,5],[2,3],[0,1]];
 function kuubouBranches(dayIdx60){ return VOID_TABLE[Math.floor(dayIdx60/10)]; }
 
-// ---- 大運（簡易計算・節入り時刻は概算） ----
 function allSetsuDatesNear(year){
   let dates=[];
   for(let yy=year-1; yy<=year+1; yy++){ SETSU_MD.forEach(([m,d])=>dates.push(new Date(yy,m-1,d))); }
@@ -173,7 +168,6 @@ function currentDaiunPillar(member, today){
   return cur;
 }
 
-// ---- 五行の相生相剋による関係性テキスト ----
 function gogyoRelationText(dayKanIdx, otherKanIdx){
   const dG = kanGogyoIdx(dayKanIdx), oG = kanGogyoIdx(otherKanIdx);
   const offset = ((oG-dG)%5+5)%5;
@@ -184,7 +178,6 @@ function gogyoRelationText(dayKanIdx, otherKanIdx){
   return {label:'印（補充）', text:'エネルギーが補われやすい、支援を受けやすい関係。'};
 }
 
-// ---- 相性診断 ----
 function compatibilityText(mA, mB){
   const aIdx = kanGogyoIdx(mA.meishiki.day.kanIdx), bIdx = kanGogyoIdx(mB.meishiki.day.kanIdx);
   const offset = ((bIdx-aIdx)%5+5)%5;
@@ -198,7 +191,6 @@ function compatibilityText(mA, mB){
   return {headline, body};
 }
 
-// ---- 個人の深掘り分析（十大主星・十二運の根拠付き） ----
 function personTypeNarrative(m){
   const dayKanIdx = m.meishiki.day.kanIdx;
   const dayGogyo = gogyoOf(dayKanIdx);
@@ -216,7 +208,6 @@ function personTypeNarrative(m){
   return lines.join('\n');
 }
 
-// 「取り扱い方」＝接し方のヒント（断定ではなく提案として）
 function handlingHint(m){
   const dayKanIdx = m.meishiki.day.kanIdx;
   const monthStar = tsuuhensei(dayKanIdx, m.meishiki.month.kanIdx);
@@ -235,7 +226,6 @@ function handlingHint(m){
   return `【接し方のヒント（月柱の十大主星「${monthStar.sanmei}」より）】${hintMap[monthStar.sanmei]}\n※これは断定ではなく、対話の参考として捉えてください。`;
 }
 
-// 1on1で聞くと良いかもしれない質問（「まだ言い出していないこと」を"予言"せず、問いかけで引き出す代替案）
 function suggestedQuestions(m){
   const dayKanIdx = m.meishiki.day.kanIdx;
   const monthStar = tsuuhensei(dayKanIdx, m.meishiki.month.kanIdx);
@@ -254,11 +244,185 @@ function suggestedQuestions(m){
   return `【1on1で聞いてみると良いかもしれない質問】\n「${qMap[monthStar.sanmei]}」\n※命式の傾向をヒントにした問いかけです。答えを決めつけず、本人の言葉で確かめてください。`;
 }
 
+// ==============================================================
+// 五行タイプ別「経営装置化」深掘りレポート
+// ==============================================================
+const ELEMENT_DEEP_PROFILE = {
+  '木': {
+    title: '🌳 木タイプ：独立心と成長エネルギーを「事業を伸ばす装置」に変える',
+    premise: `2026年、木タイプに対して\n❌「素直に指示に従わせる」年にするのではなく\n⭕「自分で意思決定して伸びる場を与える」年にする。\nここを履き違えると、\n指示待ちにさせる＝一番の強みを潰すことになります。`,
+    points: [
+      ['① 「裁量のある小さな事業単位」を持たせる', '最優先｜任される実感が成長エンジンになる', '売上・お客様体験・新しい取り組みのどれか1つを「あなたの裁量」として明確に渡す。相談ベースではなく「これはあなたが決めていい」にする。'],
+      ['② 成長の「伸びしろ」を可視化する', '木は目に見える成長がないと失速する', '半年〜1年単位で「できるようになったこと」を一緒に棚卸しする場を定期的に作る。'],
+      ['③ 型にはめすぎない', 'マニュアル遵守を最優先にすると腐りやすい', 'やり方の裁量を残したまま、結果だけを見る。手順を細かく管理しない。']
+    ],
+    ng: ['指示待ちを歓迎する', '毎回細かく手順を確認する', '「とりあえず言う通りに」で動かす'],
+    ok: ['自分で決めた形跡がある', '前回より一歩前に進んでいる', '新しいやり方を自分から提案してくる'],
+    closing: '👉 木タイプは、任せた分だけ伸びます。任せないと、静かに枯れていきます。'
+  },
+  '火': {
+    title: '🔥 火タイプ：発信力と行動力を「チームの推進エンジン」に変える',
+    premise: `2026年、火タイプに対して\n❌「落ち着かせて安定させる」年にするのではなく\n⭕「表舞台に立たせて周囲を巻き込ませる」年にする。\nここを履き違えると、\n発信力を抑える＝一番の武器を封じることになります。`,
+    points: [
+      ['① 「人前に出る役割」を明確に与える', '最優先｜発信の場がないと熱量が空回りする', '新人教育・接客ロールプレイ・SNS発信など、注目を浴びる役割を意図的に渡す。'],
+      ['② 熱量が下がった時のサインを決めておく', '火は波が大きいタイプ', '元気がない状態が続いたら、業務の話より先に「最近楽しいと感じたことは？」を聞く仕組みにする。'],
+      ['③ 単調な反復作業を長く任せすぎない', '刺激がないと熱量が下がる', 'ルーティン業務と、変化のある業務を組み合わせて渡す。']
+    ],
+    ng: ['地味な単純作業だけを渡し続ける', '感情の起伏を「ムラがある」と一律にマイナス評価する', '注目される機会を与えない'],
+    ok: ['場の空気を明るくしている', '新しいことに積極的に手を挙げる', '周りを自然と巻き込んでいる'],
+    closing: '👉 火タイプは、注目される場があるほど輝きます。地味な役割に固定すると、熱量ごと失われます。'
+  },
+  '土': {
+    title: '🪨 土タイプ：安定感と調整力を「組織の土台」に変える',
+    premise: `2026年、土タイプに対して\n❌「もっと前に出ろ」と急かす年にするのではなく\n⭕「支える役割の価値を正しく評価する」年にする。\nここを履き違えると、\n縁の下の力持ちを放置する＝組織の土台が崩れることになります。`,
+    points: [
+      ['① 「調整役」としての役割を正式なものにする', '最優先｜見えない仕事を可視化する', 'チーム間の橋渡し・新人のフォローなど、実際にやっていることを役割として明文化し評価対象にする。'],
+      ['② 変化は急に投げず、事前に共有する', '土は安定を好み、急な変化に弱い', '大きな変更がある時は、決定後ではなく検討段階から早めに情報を渡す。'],
+      ['③ 「頼られている」ことを言葉にして伝える', '感謝が伝わらないと静かに疲弊する', '定期的に、具体的なエピソードとともに感謝を伝える場を作る。']
+    ],
+    ng: ['地味な貢献を評価から外す', '変更を直前に一方的に伝える', '「もっと目立て」と急かす'],
+    ok: ['チームの雰囲気が安定している', 'トラブルの火種を早めに察知して調整している', '新人が安心して相談できている'],
+    closing: '👉 土タイプは、見えないところで組織を支えています。評価から漏らすと、静かに組織が不安定になります。'
+  },
+  '金': {
+    title: '⚔️ 金タイプ：決断力と規律を「意思決定装置」に変える',
+    premise: `2026年、金タイプに対して\n❌「みんなに合わせろ」と丸くする年にするのではなく\n⭕「判断を任せて、決めさせる」年にする。\nここを履き違えると、\n決断力を鈍らせる＝一番の強みを消すことになります。`,
+    points: [
+      ['① 「YES/NOを出す場面」を意図的に渡す', '最優先｜あいまいな合議に混ぜると力が発揮できない', '発注判断・採用可否など、白黒つける場面の権限を渡す。'],
+      ['② 評価基準を数字・事実ベースにする', '金は曖昧な評価基準に納得しない', '「頑張り」ではなく「達成したかどうか」で評価する。'],
+      ['③ 率直な意見を歓迎する空気を作る', '遠慮させると本来の切れ味が失われる', '厳しめの指摘も「ありがとう」で受け止める姿勢を周囲にも示す。']
+    ],
+    ng: ['玉虫色の結論を求める', '感覚的・情緒的な評価基準にする', '率直な発言を「空気読めない」と抑える'],
+    ok: ['迷わず判断を下せている', '約束・ルールを守り抜いている', '率直なフィードバックをくれる'],
+    closing: '👉 金タイプは、はっきり決めさせるほど価値を発揮します。曖昧にすると、宝の持ち腐れになります。'
+  },
+  '水': {
+    title: '🌊 水タイプ：柔軟性と知性を「戦略ブレーン」に変える',
+    premise: `2026年、水タイプに対して\n❌「とにかく行動しろ」と急かす年にするのではなく\n⭕「考える時間と情報を与えて、知恵を引き出す」年にする。\nここを履き違えると、\n考える前に動かす＝一番の武器を封じることになります。`,
+    points: [
+      ['① 「考える時間」を業務として認める', '最優先｜即断即決を強いると力が出ない', '新しい企画やトラブル対応の前に、一人で情報整理する時間を明示的に確保する。'],
+      ['② 情報を早めに、まとめて渡す', '水は情報が揃うほど的確な判断ができる', '小出しではなく、背景情報も含めてまとめて共有する。'],
+      ['③ 変化への対応力を活かす場を作る', '型にはまらない環境で本領を発揮する', '前例のない案件・イレギュラー対応を任せてみる。']
+    ],
+    ng: ['即断即決だけを評価軸にする', '情報を小出しにする', '毎回同じ型の業務に固定する'],
+    ok: ['状況に応じて柔軟に対応している', '一歩引いた視点で的確な助言をくれる', '前例のない問題にも冷静に対応できる'],
+    closing: '👉 水タイプは、考える余白があるほど力を発揮します。急かすと、本来の判断力が発揮できません。'
+  }
+};
+
+function deepManagementReport(m, targetYear){
+  const dayKanIdx = m.meishiki.day.kanIdx;
+  const element = gogyoOf(dayKanIdx);
+  const profile = ELEMENT_DEEP_PROFILE[element];
+  const monthStar = tsuuhensei(dayKanIdx, m.meishiki.month.kanIdx);
+  const monthJuuni = juuniun(dayKanIdx, m.meishiki.month.shiIdx);
+
+  const year = targetYear || new Date().getFullYear();
+  const yearInfo = yearGanZhiInfo(year, 6, 1);
+  const yearRel = gogyoRelationText(dayKanIdx, yearInfo.kanIdx);
+  const dp = currentDaiunPillar(m, new Date(year, 5, 1));
+
+  let out = `${profile.title}\n（${m.name}さん／日主：${KAN[dayKanIdx]}・${element}）\n\n`;
+  out += `【${year}年の年運】\n${KAN[yearInfo.kanIdx]}${SHI[yearInfo.shiIdx]}年／${yearRel.label}\n${yearRel.text}\n\n`;
+  if(dp){
+    const daiunRel = gogyoRelationText(dayKanIdx, dp.kanIdx);
+    out += `【${year}年時点の大運】${KAN[dp.kanIdx]}${SHI[dp.shiIdx]}（${dp.startAge}歳〜）／${daiunRel.label}\n${daiunRel.text}\n\n`;
+  }
+  out += `【前提】\n${profile.premise}\n\n`;
+  out += `【この人材特有の補足（月柱：${monthStar.sanmei}／${monthJuuni.stage}より）】\n`;
+  out += `${STAR_MEANING[monthStar.sanmei]}の傾向があり、${STAGE_MEANING[monthJuuni.stage]}という時期性も重なっています。\n\n`;
+  out += `【実装ポイント】\n`;
+  profile.points.forEach(([h, sub, body]) => { out += `${h}\n${sub}｜${body}\n\n`; });
+  out += `【評価すべきこと】\n❌ NG：${profile.ng.join(' / ')}\n⭕ OK：${profile.ok.join(' / ')}\n\n`;
+  out += profile.closing;
+  return out;
+}
+
+// ==============================================================
+// 業務適性マップ（陰陽五行・十大主星ベース）
+// ==============================================================
+const DOMAIN_MAP = {
+  0: { same: '採用（人を惹きつけ、見極める力）', diff: '採用（競い合いながら人を巻き込む力）' },
+  1: { same: '集客（人を楽しませ、惹きつける力）', diff: 'SNS発信（鋭い感性で言葉や表現に落とし込む力）' },
+  2: { same: '売上を上げる（機動力のある行動で稼ぐ力）', diff: '売上を上げる（堅実に積み上げて稼ぐ力）' },
+  3: { same: '組織構築（突破力で仕組みを変える力）', diff: '組織構築（規律と信頼で仕組みを守る力）' },
+  4: { same: '技術教育（独自の視点で教える力）', diff: '技術教育（体系立てて伝える力）' }
+};
+const ALL_DOMAINS = ['採用','集客','SNS発信','売上を上げる','組織構築','技術教育'];
+
+function domainScoreDetail(dayKanIdx, targetKanIdx, pillarLabel){
+  const offset = ((kanGogyoIdx(targetKanIdx) - kanGogyoIdx(dayKanIdx)) % 5 + 5) % 5;
+  const same = kanYinYang(dayKanIdx) === kanYinYang(targetKanIdx);
+  const full = DOMAIN_MAP[offset][same ? 'same' : 'diff'];
+  return { domain: full.split('（')[0], reason: `${pillarLabel}が${full}` };
+}
+function approxBranchKanIdx(shiIdx, dayKanIdx){
+  const gogyoIdx = SHI_GOGYO_IDX[SHI[shiIdx]];
+  return gogyoIdx*2 + kanYinYang(dayKanIdx);
+}
+function domainProfile(m){
+  const dayKanIdx = m.meishiki.day.kanIdx;
+  const signals = [
+    domainScoreDetail(dayKanIdx, m.meishiki.year.kanIdx, '年柱'),
+    domainScoreDetail(dayKanIdx, m.meishiki.month.kanIdx, '月柱'),
+    domainScoreDetail(dayKanIdx, approxBranchKanIdx(m.meishiki.day.shiIdx, dayKanIdx), '日支（簡易推定）')
+  ];
+  const scores = {};
+  ALL_DOMAINS.forEach(d => scores[d] = 0);
+  signals.forEach(s => { scores[s.domain] = (scores[s.domain]||0) + 1; });
+  const ranked = Object.entries(scores).sort((a,b)=>b[1]-a[1]);
+  return { scores, ranked, signals };
+}
+function replyDomainProfile(m){
+  const p = domainProfile(m);
+  let out = `■${m.name}さん（${m.group||'—'}）の業務適性（命式ベースの簡易分析）\n\n`;
+  out += `【傾向が強い領域】\n`;
+  p.ranked.slice(0,2).forEach(([d,score]) => { if(score>0) out += `・${d}（該当${score}件）\n`; });
+  out += `\n【根拠】\n`;
+  p.signals.forEach(s => out += `・${s.reason}\n`);
+  out += `\n※命式のみに基づく簡易分析です。実際の得意・不得意は本人の経験や意欲によって変わるため、断定せず対話の参考としてご活用ください。`;
+  return out;
+}
+function replyDomainRanking(domain, allMembers){
+  const scored = allMembers.map(m => {
+    const p = domainProfile(m);
+    return { m, score: p.scores[domain] || 0, reason: p.signals.filter(s=>s.domain===domain).map(s=>s.reason).join('／') };
+  }).filter(x => x.score > 0).sort((a,b)=>b.score-a.score);
+  if(!scored.length) return `命式上「${domain}」に該当する強い傾向を持つメンバーは見つかりませんでした。`;
+  let out = `■「${domain}」に命式上の適性が出やすいメンバー\n\n`;
+  scored.slice(0,8).forEach((x,i) => { out += `${i+1}. ${x.m.name}（${x.m.group||'—'}）｜${x.reason}\n`; });
+  out += `\n※命式のみに基づく簡易分析です。実際のアサインは本人の意欲・経験と合わせて判断してください。`;
+  return out;
+}
+function synergyScore(mA, mB){
+  const aIdx = kanGogyoIdx(mA.meishiki.day.kanIdx), bIdx = kanGogyoIdx(mB.meishiki.day.kanIdx);
+  const offset = ((bIdx-aIdx)%5+5)%5;
+  const gogyoScore = (offset===1||offset===4) ? 3 : (offset===0 ? 1 : 2);
+  const domainA = domainProfile(mA).ranked[0][0];
+  const domainB = domainProfile(mB).ranked[0][0];
+  const domainBonus = domainA !== domainB ? 1 : 0;
+  return { total: gogyoScore + domainBonus, gogyoScore, domainA, domainB, offset };
+}
+function replySynergySearch(m, allMembers){
+  const others = allMembers.filter(x => x.id !== m.id);
+  const scored = others.map(o => ({ o, s: synergyScore(m, o) })).sort((a,b)=>b.s.total-a.s.total);
+  const top = scored.slice(0,5);
+  const myDomain = domainProfile(m).ranked[0][0];
+  let out = `■${m.name}さん（強み：${myDomain}）と相乗効果が生まれやすいメンバー\n\n`;
+  top.forEach((x,i) => {
+    const rel = gogyoRelationText(m.meishiki.day.kanIdx, x.o.meishiki.day.kanIdx);
+    out += `${i+1}. ${x.o.name}（${x.o.group||'—'}）｜五行関係：${rel.label}｜強み：${x.s.domainB}${x.s.domainA!==x.s.domainB ? '（異なる強みで補完し合える組み合わせ）' : ''}\n`;
+  });
+  out += `\n※五行の相性と、命式上の強みの違い（補完関係）から算出した簡易分析です。実際の組み合わせは対話と実績を踏まえて判断してください。`;
+  return out;
+}
+
 module.exports = {
   KAN, SHI, GOGYO_NAMES,
   kanGogyoIdx, kanYinYang, tsuuhensei, juuniun,
   computeMeishiki, pillarStr, gogyoOf, kuubouBranches,
   daiun, currentDaiunPillar, gogyoRelationText,
   compatibilityText, personTypeNarrative, handlingHint, suggestedQuestions,
-  monthBranch
+  deepManagementReport, monthBranch,
+  domainProfile, replyDomainProfile, replyDomainRanking, replySynergySearch, ALL_DOMAINS
 };

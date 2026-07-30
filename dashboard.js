@@ -52,8 +52,6 @@ function renderDashboard(members){
   th,td{ text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
   th{ color:var(--ink-soft); font-size:11px; }
   .tag{ background:var(--paper-deep); padding:2px 8px; border:1px solid var(--line); font-size:11px; }
-  .guide td{ vertical-align:top; }
-  .guide code{ background:var(--paper-deep); padding:2px 6px; border:1px solid var(--line); color:var(--accent); }
   .domain-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; }
   .domain-card{ background:#FFFDF8; border:1px solid var(--line); padding:14px 16px; }
   .domain-card h3{ font-size:13px; margin:0 0 8px; color:var(--accent); }
