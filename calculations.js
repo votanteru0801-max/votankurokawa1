@@ -5,6 +5,7 @@
 // ==============================================================
 
 const KAN = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
+const KAN_YOMI = ['きのえ','きのと','ひのえ','ひのと','つちのえ','つちのと','かのえ','かのと','みずのえ','みずのと'];
 const SHI = ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'];
 const GOGYO_NAMES = ['木','火','土','金','水'];
 const SHI_GOGYO_IDX = {'子':4,'丑':2,'寅':0,'卯':0,'辰':2,'巳':1,'午':1,'未':2,'申':3,'酉':3,'戌':2,'亥':4};
@@ -228,7 +229,9 @@ function personTypeNarrative(m){
   const kb = kuubouBranches(m.meishiki.dayIdx60).map(i=>SHI[i]);
 
   const lines = [];
-  lines.push(`【日主】${KAN[dayKanIdx]}（${dayGogyo}の性質）：${KAN_TRAITS[dayKanIdx]}。`);
+  const yinyang = kanYinYang(dayKanIdx)===0 ? '陽' : '陰';
+  lines.push(`【陰陽五行】あなたの日主は「${KAN[dayKanIdx]}（${KAN_YOMI[dayKanIdx]}）」＝${yinyang}の${dayGogyo}です。`);
+  lines.push(`【日主の性質】${KAN_TRAITS[dayKanIdx]}。`);
   lines.push(`【月柱】十大主星は「${monthStar.sanmei}」＝${STAR_MEANING[monthStar.sanmei]}。十二大従星は「${monthJuuni.sanmei}」で、${STAGE_MEANING[monthJuuni.stage]}。→対人関係・お店での立ち回りにこの傾向が出やすいと言えます。`);
   lines.push(`【年柱】十大主星は「${yearStar.sanmei}」＝${STAR_MEANING[yearStar.sanmei]}。十二大従星は「${yearJuuni.sanmei}」で、${STAGE_MEANING[yearJuuni.stage]}。→目上の人や生い立ちに関わる部分にこの傾向が出やすいと言えます。`);
   if(m.meishiki.hour){
