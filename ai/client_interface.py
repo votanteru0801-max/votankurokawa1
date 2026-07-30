@@ -1,0 +1,60 @@
+"""AI分析クライアントの抽象インターフェース。本番(Anthropic)とモックを差し替え可能にする。
+
+MVPでは「データ取得・最小化はアプリ側が確定させ、Claudeには労を集約した最終解釈の
+生成のみを依頼する」設計を採用する（Claudeがperson_idを取り違える等のリスクを避け、
+書き込みだけでなく読み取りの対象特定もアプリ側で確実に行うため）。
+一方で app/ai/tools.py・tool_executor.py は要件24章の「ツールまたは同等の機能」を
+満たす完全なツール実行層として用意しており、より複雑な自由対話（比較・チーム編成等、
+第2段階）ではClaudeによる能動的なツール呼び出しループへ拡張できる。
+"""
+from __future__ import annotations
+
+from typing import Literal, Protocol, Union
+
+from app.ai.output_schemas import (
+    CompatibilityAnalysisResponse,
+    DetailedAnalysisResponse,
+    SimpleAnalysisResponse,
+    TeamRecommendationResponse,
+)
+
+AnalysisMode = Literal["simple", "detailed"]
+
+
+class AIAnalysisClient(Protocol):
+    def generate_analysis(
+        self,
+        mode: AnalysisMode,
+        person_name: str,
+        person_id: str,
+        calculation_data: dict,
+        hr_context: dict,
+        question: str,
+        accuracy_notes: list[str],
+    ) -> Union[SimpleAnalysisResponse, DetailedAnalysisResponse]:
+        ...
+
+    def recommend_team(
+        self,
+        criteria: str,
+        candidates: list[dict],
+    ) -> TeamRecommendationResponse:
+        """条件に合う人物候補を、軽量な命式サマリー一覧から提案する。"""
+        ...
+
+    def generate_compatibility(
+        self,
+        person_a_name: str,
+        person_a_id: str,
+        data_a: dict,
+        person_b_name: str,
+        person_b_id: str,
+        data_b: dict,
+        accuracy_notes: list[str],
+    ) -> CompatibilityAnalysisResponse:
+        """二者間の相性チェック（命式全体・算命学に基づく解釈）を生成する。"""
+        ...
+
+
+class AnalysisGenerationError(Exception):
+    pass

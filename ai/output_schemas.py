@@ -79,6 +79,14 @@ class DetailedAnalysisResponse(BaseModel):
             "無理に弱みを作り出さず、空のリストのままにしてください。"
         ),
     )
+    growth_guidance: list[LabeledPoint] = Field(
+        default_factory=list,
+        description=(
+            "この人物の伸ばし方・成長を後押しする具体的な関わり方。強みや「伸びどき」"
+            "（十二運が長生・冠帯・建禄・帝旺にあたる大運・年運など）を踏まえ、"
+            "どのように任せる・関わると伸びやすいかを具体的に、可能であれば1〜3件含めてください。"
+        ),
+    )
     suitable_roles: list[LabeledPoint] = Field(default_factory=list)
     current_major_luck: str = ""
     current_annual_luck: str = ""
@@ -87,4 +95,38 @@ class DetailedAnalysisResponse(BaseModel):
     interview_questions: list[str] = Field(default_factory=list)
     hr_proposals: list[LabeledPoint] = Field(default_factory=list)
     facts_to_confirm: list[str] = Field(default_factory=list)
+    accuracy_notes: list[str] = Field(default_factory=list)
+
+
+class CompatibilityAnalysisResponse(BaseModel):
+    """二者間の「相性チェック」結果。十干（日主）だけでなく、四柱推命の命式全体
+    （年柱・月柱・日柱・時柱）と算命学（十二運・通変星・天中殺/空亡）を踏まえて
+    解釈することを前提にしたスキーマ。"""
+
+    person_a_id: str
+    person_b_id: str
+    person_a_name: str
+    person_b_name: str
+    conclusion: str
+    fortune_basis: list[str] = Field(default_factory=list)
+    good_points: list[LabeledPoint] = Field(
+        default_factory=list,
+        description=(
+            "二人の相性が良いとされる点。日干同士の五行の関係（比和・相生等）、"
+            "年柱・月柱・日柱・時柱の干支の組み合わせ、通変星、大運・年運の重なりなど、"
+            "命式全体を踏まえた具体的な根拠とともに必ず1件以上含めてください。"
+        ),
+    )
+    friction_points: list[LabeledPoint] = Field(
+        default_factory=list,
+        description=(
+            "衝突・すれ違いが起きやすいとされる点。命式の関係性から明確に読み取れる"
+            "場合のみ記載してください。際立った根拠が無い場合は、無理に作り出さず"
+            "空のリストのままにしてください。"
+        ),
+    )
+    communication_tips: list[LabeledPoint] = Field(
+        default_factory=list,
+        description="この二人がうまく関わるための具体的なコミュニケーションの工夫・接し方。",
+    )
     accuracy_notes: list[str] = Field(default_factory=list)
