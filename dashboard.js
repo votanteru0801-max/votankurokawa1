@@ -6,27 +6,32 @@ function renderDashboard(rawMembers, opts){
   opts = opts || {};
   const q = opts.q || '';
   const result = opts.result || null;
+  const candidateName = opts.candidateName || '';
+  const candidateBirth = opts.candidateBirth || '';
+  const candidateResult = opts.candidateResult || null;
+
   const withMeishiki = rawMembers.map(m => ({ ...m, meishiki: calc.computeMeishiki(m.birth) }));
 
-  const memberRows = withMeishiki.map(m => {
-    const p = calc.domainProfile(m);
-    const top = p.ranked.find(([,s]) => s > 0);
-    return `<tr>
+  // 所属（店舗）ごとにグループ化
+  const groups = {};
+  withMeishiki.forEach(m => {
+    const g = m.group || '未分類';
+    if(!groups[g]) groups[g] = [];
+    groups[g].push(m);
+  });
+
+  const groupSections = Object.keys(groups).sort().map(g => {
+    const rows = groups[g].map(m => `<tr>
       <td><a href="/?q=${encodeURIComponent(m.name)}">${esc(m.name)}</a></td>
-      <td>${esc(m.group)}</td>
       <td>${calc.pillarStr(m.meishiki.year)} ${calc.pillarStr(m.meishiki.month)} ${calc.pillarStr(m.meishiki.day)}</td>
       <td><span class="tag">${calc.KAN[m.meishiki.day.kanIdx]}（${calc.gogyoOf(m.meishiki.day.kanIdx)}）</span></td>
-      <td>${top ? esc(top[0]) : '—'}</td>
-    </tr>`;
-  }).join('');
-
-  const domainSections = calc.ALL_DOMAINS.map(domain => {
-    const scored = withMeishiki.map(m => ({ m, score: calc.domainProfile(m).scores[domain] || 0 }))
-      .filter(x => x.score > 0).sort((a,b)=>b.score-a.score).slice(0,8);
-    const items = scored.map((x,i) => `<li><a href="/?q=${encodeURIComponent(x.m.name)}">${i+1}. ${esc(x.m.name)}（${esc(x.m.group)}）</a></li>`).join('');
-    return `<div class="domain-card">
-      <h3>${esc(domain)}</h3>
-      <ol>${items || '<li class="empty">該当者なし</li>'}</ol>
+    </tr>`).join('');
+    return `<div class="store-card">
+      <h3>${esc(g)}（${groups[g].length}名）</h3>
+      <table>
+        <thead><tr><th>氏名</th><th>年柱／月柱／日柱</th><th>日主</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
     </div>`;
   }).join('');
 
@@ -56,17 +61,14 @@ function renderDashboard(rawMembers, opts){
   th{ color:var(--ink-soft); font-size:11px; }
   a{ color:var(--ink); }
   .tag{ background:var(--paper-deep); padding:2px 8px; border:1px solid var(--line); font-size:11px; }
-  .domain-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; }
-  .domain-card{ background:#FFFDF8; border:1px solid var(--line); padding:14px 16px; }
-  .domain-card h3{ font-size:13px; margin:0 0 8px; color:var(--accent); }
-  .domain-card ol{ margin:0; padding-left:18px; font-size:12.5px; }
-  .domain-card .empty{ color:var(--ink-soft); list-style:none; margin-left:-18px; }
-  .table-wrap{ max-height:520px; overflow-y:auto; }
+  .store-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; }
+  .store-card{ background:#FFFDF8; border:1px solid var(--line); padding:14px 16px; }
+  .store-card h3{ font-size:13px; margin:0 0 10px; color:var(--accent); }
   .count{ font-size:12px; color:var(--ink-soft); margin-bottom:10px; }
   .kuubou-list{ background:#FFFDF8; border:1px solid var(--line); padding:14px 16px 14px 32px; font-size:13px; }
   .kuubou-list .empty{ list-style:none; margin-left:-16px; color:var(--ink-soft); }
-  form.search{ display:flex; gap:8px; margin-bottom:10px; }
-  input[type=text]{ flex:1; padding:12px 14px; border:1px solid var(--line); font-size:14px; background:#fff; }
+  form.search{ display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+  input[type=text],input[type=date]{ flex:1; min-width:140px; padding:12px 14px; border:1px solid var(--line); font-size:14px; background:#fff; }
   button{ padding:12px 22px; border:none; background:var(--ink); color:var(--paper); font-size:13px; letter-spacing:0.05em; cursor:pointer; }
   button:hover{ background:var(--accent); }
   .hint{ font-size:12px; color:var(--ink-soft); margin-bottom:16px; }
@@ -81,17 +83,28 @@ function renderDashboard(rawMembers, opts){
 </header>
 <main>
   <section>
-    <h2>検索（詳細分析・相性・チーム編成・採用向け領域検索）</h2>
+    <h2>検索（詳細分析・相性・チーム編成）</h2>
     <form class="search" method="get" action="/">
-      <input type="text" name="q" placeholder="例：山田太郎　／　山田太郎 佐藤花子　／　採用" value="${esc(q)}">
+      <input type="text" name="q" placeholder="例：山田太郎　／　山田太郎 佐藤花子" value="${esc(q)}">
       <button type="submit">検索</button>
     </form>
     <div class="hint">
       個人の詳細分析：<code>山田太郎</code>（<code>山田太郎 今年</code>で年運も表示）／
-      相性：<code>山田太郎 佐藤花子</code>／チーム編成：3名以上をスペース区切りで／
-      相乗効果：<code>山田太郎 相乗効果</code>／採用など領域検索：<code>採用</code><code>集客</code>など領域名のみ
+      相性：<code>山田太郎 佐藤花子</code>／チーム編成：3名以上をスペース区切り／
+      相乗効果：<code>山田太郎 相乗効果</code>
     </div>
-    ${result ? `<div class="result">${esc(result)}</div>` : (q ? `<div class="result">該当するメンバー・領域が見つかりませんでした。</div>` : '')}
+    ${result ? `<div class="result">${esc(result)}</div>` : (q ? `<div class="result">該当するメンバーが見つかりませんでした。</div>` : '')}
+  </section>
+
+  <section>
+    <h2>採用候補者チェック（中途・新卒）</h2>
+    <p class="count">まだ登録していない候補者の氏名・生年月日を入力すると、既存メンバーとの相性・チームへの入り方の傾向を確認できます。</p>
+    <form class="search" method="get" action="/">
+      <input type="text" name="cname" placeholder="候補者氏名" value="${esc(candidateName)}">
+      <input type="date" name="cbirth" value="${esc(candidateBirth)}">
+      <button type="submit">候補者を分析</button>
+    </form>
+    ${candidateResult ? `<div class="result">${esc(candidateResult)}</div>` : ''}
   </section>
 
   <section>
@@ -101,18 +114,8 @@ function renderDashboard(rawMembers, opts){
   </section>
 
   <section>
-    <h2>全メンバー一覧（${withMeishiki.length}名）</h2>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>氏名</th><th>所属</th><th>年柱／月柱／日柱</th><th>日主</th><th>命式上の強み</th></tr></thead>
-        <tbody>${memberRows}</tbody>
-      </table>
-    </div>
-  </section>
-
-  <section>
-    <h2>領域別 適性ランキング（採用・配置検索）</h2>
-    <div class="domain-grid">${domainSections}</div>
+    <h2>店舗別 メンバー一覧（全${withMeishiki.length}名）</h2>
+    <div class="store-grid">${groupSections}</div>
   </section>
 </main>
 </body>

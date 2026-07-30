@@ -74,4 +74,12 @@ function resolveQuery(text, rawMembers){
   return null;
 }
 
-module.exports = { resolveQuery, findByName };
+function replyCandidate(candidate, allMembers){
+  const narrative = calc.personTypeNarrative(candidate);
+  const hint = calc.handlingHint(candidate);
+  const domain = calc.replyDomainProfile(candidate);
+  const synergy = calc.replySynergySearch(candidate, allMembers);
+  return `■候補者：${candidate.name}さんの分析\n\n${narrative}\n\n${hint}\n\n${domain}\n\n${synergy}`;
+}
+
+module.exports = { resolveQuery, findByName, replyCandidate };

@@ -2,16 +2,27 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { renderDashboard } = require('./dashboard');
-const { resolveQuery } = require('./query');
+const { resolveQuery, replyCandidate } = require('./query');
+const calc = require('./calculations');
 
 const MEMBERS_PATH = path.join(__dirname, 'members.json');
 const app = express();
 
 app.get('/', (req, res) => {
   const q = (req.query.q || '').trim();
+  const cname = (req.query.cname || '').trim();
+  const cbirth = (req.query.cbirth || '').trim();
   const rawMembers = JSON.parse(fs.readFileSync(MEMBERS_PATH, 'utf-8'));
   const result = q ? resolveQuery(q, rawMembers) : null;
-  res.send(renderDashboard(rawMembers, { q, result }));
+
+  let candidateResult = null;
+  if(cname && cbirth){
+    const members = rawMembers.map(m => ({ ...m, meishiki: calc.computeMeishiki(m.birth) }));
+    const candidate = { name: cname, birth: cbirth, meishiki: calc.computeMeishiki(cbirth) };
+    candidateResult = replyCandidate(candidate, members);
+  }
+
+  res.send(renderDashboard(rawMembers, { q, result, candidateName: cname, candidateBirth: cbirth, candidateResult }));
 });
 
 const PORT = process.env.PORT || 3000;
