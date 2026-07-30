@@ -45,12 +45,6 @@ function resolveQuery(text, rawMembers){
   if(found.length === 1 && wantsSynergy){
     return calc.replySynergySearch(found[0], members);
   }
-  if(found.length >= 3){
-    return replyTeam(found);
-  }
-  if(found.length === 2){
-    return replyCompat(found[0], found[1]);
-  }
   if(found.length === 1){
     return replyDetail(found[0]);
   }
@@ -66,4 +60,101 @@ function replyCandidate(candidate, allMembers){
   return `■候補者：${candidate.name}さんの分析\n\n${narrative}\n\n${hint}\n\n${domain}${role ? '\n'+role+'\n' : ''}\n${synergy}`;
 }
 
-module.exports = { resolveQuery, findByName, replyCandidate };
+const DOMAIN_KEYWORDS = {
+  '技術教育': ['技術', '教育', '育成', 'メニュー開発', '新しい技術', '研修'],
+  '採用': ['採用', '人材', '面接'],
+  '集客': ['集客', '予約', '新規客'],
+  'SNS発信': ['SNS', '発信', '投稿', 'インスタ'],
+  '売上を上げる': ['売上', '営業', '利益', '数字'],
+  '組織構築': ['組織', 'マネジメント', '仕組み', '運営']
+};
+const ROLE_ORDER = ['アシスタント','スタイリスト','店長','マネージャー'];
+
+function findThemeDomain(text){
+  for(const [domain, words] of Object.entries(DOMAIN_KEYWORDS)){
+    if(words.some(w => text.includes(w))) return domain;
+  }
+  return null;
+}
+function findRoleFilter(text){
+  const m = text.match(/(.+?)以上/);
+  if(!m) return null;
+  const roleName = m[1].trim();
+  const idx = ROLE_ORDER.findIndex(r => roleName.includes(r) || r.includes(roleName));
+  if(idx === -1) return null;
+  return { roleName, minLevel: idx };
+}
+
+function findAnchor(text, members){
+  const exact = findByName(members, text);
+  if(exact.length === 1) return { anchor: exact[0], ambiguous: null };
+  if(exact.length > 1) return { anchor: null, ambiguous: exact };
+
+  // フルネームで見つからない場合、姓（スペース区切りの前半）だけでの部分一致を試す
+  const bySurname = members.filter(m => {
+    const surname = m.name.split(/\s+/)[0];
+    return surname.length >= 2 && text.includes(surname);
+  });
+  if(bySurname.length === 1) return { anchor: bySurname[0], ambiguous: null };
+  if(bySurname.length > 1) return { anchor: null, ambiguous: bySurname };
+  return { anchor: null, ambiguous: null };
+}
+
+function resolveTeamTheme(themeText, rawMembers){
+  const members = rawMembers.map(m => ({ ...m, meishiki: calc.computeMeishiki(m.birth, m.time) }));
+  const { anchor, ambiguous } = findAnchor(themeText, members);
+  const domain = findThemeDomain(themeText);
+  const roleFilter = findRoleFilter(themeText);
+
+  if(ambiguous && ambiguous.length){
+    return `■テーマ「${themeText}」\n\n名前の候補が複数見つかりました：${ambiguous.map(m=>`${m.name}（${m.group||'—'}）`).join('、')}\nお手数ですが、フルネームで指定し直してください。`;
+  }
+
+  let pool = members;
+  let roleNote = '';
+  if(roleFilter){
+    const filtered = pool.filter(m => {
+      const idx = ROLE_ORDER.findIndex(r => m.role && m.role.includes(r));
+      return idx >= roleFilter.minLevel;
+    });
+    if(filtered.length){
+      pool = filtered;
+    } else {
+      roleNote = `\n※「${roleFilter.roleName}以上」で絞り込もうとしましたが、役職（役職欄）が登録されているメンバーがいないため、全メンバーから選出しています。`;
+    }
+  }
+
+  let scored;
+  let headline;
+  if(anchor){
+    pool = pool.filter(m => m.name !== anchor.name);
+    scored = pool.map(m => ({ m, score: calc.gogyoRelationText ? null : null }));
+    scored = pool.map(m => {
+      const s = calc.compatibilityText(anchor, m);
+      const aIdx = calc.kanGogyoIdx(anchor.meishiki.day.kanIdx), bIdx = calc.kanGogyoIdx(m.meishiki.day.kanIdx);
+      const offset = ((bIdx-aIdx)%5+5)%5;
+      const score = (offset===1||offset===4) ? 3 : (offset===0 ? 1 : 2);
+      return { m, score, headline: s.headline };
+    }).sort((a,b)=>b.score-a.score);
+    headline = `■テーマ「${themeText}」：${anchor.name}さんと相性の良いメンバー`;
+  } else if(domain){
+    scored = pool.map(m => ({ m, score: calc.domainProfile(m).scores[domain] || 0 })).sort((a,b)=>b.score-a.score);
+    headline = `■テーマ「${themeText}」：「${domain}」に適性のあるメンバー`;
+  } else {
+    scored = pool.map(m => ({ m, score: 0 }));
+    headline = `■テーマ「${themeText}」：該当するキーワードが見つからなかったため、ランダムに候補を表示しています`;
+  }
+
+  const top5 = scored.slice(0,5);
+  let out = `${headline}\n\n`;
+  top5.forEach((x,i) => {
+    const p = calc.domainProfile(x.m);
+    const strong = p.ranked.filter(([,s])=>s>0).map(([d])=>d).slice(0,2).join('／') || '該当なし';
+    out += `${i+1}. ${x.m.name}（${x.m.group||'—'}${x.m.role ? '／'+x.m.role : ''}）｜命式上の強み：${strong}\n`;
+  });
+  out += roleNote;
+  out += `\n※命式・五行に基づく簡易的な提案です。実際の編成は本人のスキル・希望と合わせて判断してください。`;
+  return out;
+}
+
+module.exports = { resolveQuery, findByName, replyCandidate, resolveTeamTheme };

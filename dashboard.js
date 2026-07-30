@@ -44,6 +44,11 @@ function renderDashboard(rawMembers, opts){
   const candidateTime = opts.candidateTime || '';
   const candidateRole = opts.candidateRole || '';
   const candidateResult = opts.candidateResult || null;
+  const compatA = opts.compatA || '';
+  const compatB = opts.compatB || '';
+  const compatResult = opts.compatResult || null;
+  const theme = opts.theme || '';
+  const themeResult = opts.themeResult || null;
 
   const withMeishiki = rawMembers.map(m => ({ ...m, meishiki: calc.computeMeishiki(m.birth, m.time) }));
 
@@ -116,6 +121,7 @@ function renderDashboard(rawMembers, opts){
   .kuubou-list .empty{ list-style:none; margin-left:-16px; color:var(--ink-soft); }
   form.search{ display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
   input[type=text],input[type=date]{ flex:1; min-width:140px; padding:12px 14px; border:1px solid var(--line); font-size:14px; background:#fff; }
+  select{ flex:1; min-width:160px; padding:12px 14px; border:1px solid var(--line); font-size:14px; background:#fff; }
   button{ padding:12px 22px; border:none; background:var(--ink); color:var(--paper); font-size:13px; letter-spacing:0.05em; cursor:pointer; }
   button:hover{ background:var(--accent); }
   .hint{ font-size:12px; color:var(--ink-soft); margin-bottom:16px; }
@@ -138,17 +144,41 @@ function renderDashboard(rawMembers, opts){
 </header>
 <main>
   <section>
-    <h2>検索（詳細分析・相性・チーム編成）</h2>
+    <h2>個人の詳細分析</h2>
     <form class="search" method="get" action="/">
-      <input type="text" name="q" placeholder="例：山田太郎　／　山田太郎 佐藤花子" value="${esc(q)}">
+      <input type="text" name="q" placeholder="例：山田太郎" value="${esc(q)}">
       <button type="submit">検索</button>
     </form>
     <div class="hint">
-      個人の詳細分析：<code>山田太郎</code>（<code>山田太郎 今年</code>で年運も表示）／
-      相性：<code>山田太郎 佐藤花子</code>／チーム編成：3名以上をスペース区切り／
-      相乗効果：<code>山田太郎 相乗効果</code>
+      個人の詳細分析：<code>山田太郎</code>／相乗効果：<code>山田太郎 相乗効果</code>
     </div>
     ${result ? `<div class="result">${formatResult(result)}</div>` : (q ? `<div class="result">該当するメンバーが見つかりませんでした。</div>` : '')}
+  </section>
+
+  <section>
+    <h2>相性チェック</h2>
+    <form class="search" method="get" action="/">
+      <select name="compatA">
+        <option value="">メンバーA を選択</option>
+        ${withMeishiki.map(m => `<option value="${esc(m.name)}" ${compatA===m.name?'selected':''}>${esc(m.name)}（${esc(m.group)}）</option>`).join('')}
+      </select>
+      <select name="compatB">
+        <option value="">メンバーB を選択</option>
+        ${withMeishiki.map(m => `<option value="${esc(m.name)}" ${compatB===m.name?'selected':''}>${esc(m.name)}（${esc(m.group)}）</option>`).join('')}
+      </select>
+      <button type="submit">相性を見る</button>
+    </form>
+    ${compatResult ? `<div class="result">${formatResult(compatResult)}</div>` : ''}
+  </section>
+
+  <section>
+    <h2>チーム編成（テーマから5名を提案）</h2>
+    <p class="count">テーマを入力すると、命式・五行の観点から5名を自動で提案します。例：「石橋と相性のいい人」「新しい技術のメニュー開発　スタイリスト以上で」</p>
+    <form class="search" method="get" action="/">
+      <input type="text" name="theme" placeholder="例：石橋と相性のいい人 ／ 新しい技術のメニュー開発" value="${esc(theme)}">
+      <button type="submit">5名を提案</button>
+    </form>
+    ${themeResult ? `<div class="result">${formatResult(themeResult)}</div>` : ''}
   </section>
 
   <section>
