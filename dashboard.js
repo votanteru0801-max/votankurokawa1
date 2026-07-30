@@ -2,6 +2,39 @@ const calc = require('./calculations');
 
 function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+// 「■タイトル」「【見出し】本文」形式のプレーンテキストを、見やすいカードHTMLに整形
+function formatResult(text){
+  const lines = text.split('\n');
+  let html = '';
+  let label = null, body = [];
+  const flush = () => {
+    if(label){
+      const highlight = (label === '陰陽五行' || label === '日主の性質') ? ' highlight' : '';
+      html += `<div class="field${highlight}"><div class="field-label">${esc(label)}</div><div class="field-body">${esc(body.join('\n'))}</div></div>`;
+    } else if(body.join('').trim()){
+      html += `<p class="plain">${esc(body.join('\n'))}</p>`;
+    }
+    body = [];
+  };
+  lines.forEach(line => {
+    const m = line.match(/^【(.+?)】(.*)$/);
+    if(line.startsWith('■')){
+      flush(); label = null;
+      html += `<h3 class="result-title">${esc(line.replace(/^■/,''))}</h3>`;
+    } else if(m){
+      flush();
+      label = m[1];
+      body = [m[2]];
+    } else if(line.trim() === ''){
+      flush(); label = null;
+    } else {
+      body.push(line);
+    }
+  });
+  flush();
+  return html;
+}
+
 function renderDashboard(rawMembers, opts){
   opts = opts || {};
   const q = opts.q || '';
@@ -39,8 +72,20 @@ function renderDashboard(rawMembers, opts){
 
   const today = new Date();
   const curBranch = calc.monthBranch(today.getFullYear(), today.getMonth()+1, today.getDate());
-  const kuubouList = withMeishiki.filter(m => calc.kuubouBranches(m.meishiki.dayIdx60).map(i=>calc.SHI[i]).includes(curBranch));
-  const kuubouItems = kuubouList.map(m => `<li><a href="/?q=${encodeURIComponent(m.name)}">${esc(m.name)}（${esc(m.group)}）</a></li>`).join('');
+  const LOW_STAGES = ['死','墓','絶'];
+  const kuubouList = withMeishiki.filter(m => {
+    const inKuubouMonth = calc.kuubouBranches(m.meishiki.dayIdx60).map(i=>calc.SHI[i]).includes(curBranch);
+    if(!inKuubouMonth) return false;
+    const dp = calc.currentDaiunPillar(m, today);
+    if(!dp) return false; // 性別未設定などで大運が算出できない場合は対象外
+    const stage = calc.juuniun(m.meishiki.day.kanIdx, dp.shiIdx).stage;
+    return LOW_STAGES.includes(stage);
+  });
+  const kuubouItems = kuubouList.map(m => {
+    const dp = calc.currentDaiunPillar(m, today);
+    const stage = calc.juuniun(m.meishiki.day.kanIdx, dp.shiIdx).stage;
+    return `<li><a href="/?q=${encodeURIComponent(m.name)}">${esc(m.name)}（${esc(m.group)}）</a> <span class="tag warn">大運：${esc(stage)}</span></li>`;
+  }).join('');
 
   return `<!DOCTYPE html>
 <html lang="ja">
@@ -75,7 +120,15 @@ function renderDashboard(rawMembers, opts){
   button:hover{ background:var(--accent); }
   .hint{ font-size:12px; color:var(--ink-soft); margin-bottom:16px; }
   .hint code{ background:var(--paper-deep); padding:1px 5px; border:1px solid var(--line); }
-  .result{ background:#FFFDF8; border:1px solid var(--line); padding:20px; white-space:pre-wrap; font-size:14px; margin-bottom:10px; }
+  .result{ background:#FFFDF8; border:1px solid var(--line); padding:20px; font-size:14px; margin-bottom:10px; }
+  .result-title{ font-family:"Hiragino Mincho ProN",serif; font-size:17px; color:var(--accent); margin:0 0 14px; padding-bottom:8px; border-bottom:1px solid var(--line); }
+  .result .field{ margin-bottom:14px; }
+  .result .field-label{ display:inline-block; font-size:11.5px; font-weight:bold; color:#fff; background:var(--ink); padding:2px 10px; border-radius:2px; margin-bottom:6px; letter-spacing:0.05em; }
+  .result .field.highlight .field-label{ background:var(--accent); font-size:12.5px; padding:4px 12px; }
+  .result .field.highlight .field-body{ font-size:15px; font-weight:bold; }
+  .result .field-body{ white-space:pre-wrap; line-height:1.8; }
+  .result .plain{ white-space:pre-wrap; color:var(--ink-soft); font-size:12.5px; margin:0 0 10px; }
+  .tag.warn{ background:var(--accent); color:#fff; padding:2px 8px; font-size:11px; border-radius:2px; }
 </style>
 </head>
 <body>
@@ -95,7 +148,7 @@ function renderDashboard(rawMembers, opts){
       相性：<code>山田太郎 佐藤花子</code>／チーム編成：3名以上をスペース区切り／
       相乗効果：<code>山田太郎 相乗効果</code>
     </div>
-    ${result ? `<div class="result">${esc(result)}</div>` : (q ? `<div class="result">該当するメンバーが見つかりませんでした。</div>` : '')}
+    ${result ? `<div class="result">${formatResult(result)}</div>` : (q ? `<div class="result">該当するメンバーが見つかりませんでした。</div>` : '')}
   </section>
 
   <section>
@@ -108,12 +161,12 @@ function renderDashboard(rawMembers, opts){
       <input type="text" name="crole" placeholder="想定役職（例：スタイリスト／任意）" value="${esc(candidateRole)}">
       <button type="submit">候補者を分析</button>
     </form>
-    ${candidateResult ? `<div class="result">${esc(candidateResult)}</div>` : ''}
+    ${candidateResult ? `<div class="result">${formatResult(candidateResult)}</div>` : ''}
   </section>
 
   <section>
-    <h2>今月、空亡の時期にあたるメンバー（アラート・${kuubouList.length}名）</h2>
-    <p class="count">良し悪しの判定ではなく「本来のリズムと違う動きをしやすい時期」という参考情報です。評価の場ではなく、雑談や1on1で近況を聞いてみることをおすすめします。</p>
+    <h2>今月、空亡かつ大運が死・墓・絶にあたるメンバー（アラート・${kuubouList.length}名）</h2>
+    <p class="count">「今月が空亡」に加えて「大運（10年単位の運気）が死・墓・絶の時期」の両方が重なっているメンバーのみ表示しています。良し悪しの判定ではなく「本来のリズムが読みにくく、力を溜めている時期」という参考情報です。評価の場ではなく、雑談や1on1で近況を聞いてみることをおすすめします。（性別未登録のメンバーは大運を算出できないため対象外です）</p>
     <ul class="kuubou-list">${kuubouItems || '<li class="empty">該当者なし</li>'}</ul>
   </section>
 
