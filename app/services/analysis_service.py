@@ -10,7 +10,7 @@ from app.ai.prompt_design import DataPurpose
 from app.ai.response_formatter import format_detailed_analysis, format_simple_analysis
 from app.ai.tool_executor import ToolContext, ToolValidationError, execute_tool
 from app.config import get_settings
-from app.services import audit_service
+from app.services import audit_service, person_fortune
 
 
 class AnalysisError(Exception):
@@ -31,7 +31,19 @@ def run_analysis_for_person(db, repo, ai_client, actor_id: str, person, question
     except ToolValidationError as e:
         raise AnalysisError(f"命式計算でエラーが発生しました: {e}") from e
 
-    calculation_data = {"shichuu_suimei": four_pillars, "sanmeigaku": sanmeigaku, "luck_cycles": luck}
+    # 空亡（天中殺）を「地支名」だけでなく「実際の年月」でAIに説明させるための補助データ。
+    # 生年月日は上のexecute_toolがすでに成功しているため必ず登録済みだが、念のため握りつぶす。
+    try:
+        kubou_months = person_fortune.kubou_months_for_person(person)
+    except ToolValidationError:
+        kubou_months = []
+
+    calculation_data = {
+        "shichuu_suimei": four_pillars,
+        "sanmeigaku": sanmeigaku,
+        "luck_cycles": luck,
+        "kubou_months": kubou_months,
+    }
     purpose = DataPurpose.DETAILED_ANALYSIS if mode == "detailed" else DataPurpose.SIMPLE_ANALYSIS
     hr_context = execute_tool(
         "get_relevant_hr_context", {"person_id": str(person.person_id), "purpose": purpose.value}, ctx

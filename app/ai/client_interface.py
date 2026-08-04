@@ -11,7 +11,12 @@ from __future__ import annotations
 
 from typing import Literal, Protocol, Union
 
-from app.ai.output_schemas import DetailedAnalysisResponse, SimpleAnalysisResponse, TeamRecommendationResponse
+from app.ai.output_schemas import (
+    CompatibilityAnalysisResponse,
+    DetailedAnalysisResponse,
+    SimpleAnalysisResponse,
+    TeamRecommendationResponse,
+)
 
 AnalysisMode = Literal["simple", "detailed"]
 
@@ -35,6 +40,19 @@ class AIAnalysisClient(Protocol):
         candidates: list[dict],
     ) -> TeamRecommendationResponse:
         """条件に合う人物候補を、軽量な命式サマリー一覧から提案する。"""
+        ...
+
+    def generate_compatibility(
+        self,
+        person_a_name: str,
+        person_a_id: str,
+        data_a: dict,
+        person_b_name: str,
+        person_b_id: str,
+        data_b: dict,
+        accuracy_notes: list[str],
+    ) -> CompatibilityAnalysisResponse:
+        """二者間の相性チェック（命式全体・算命学に基づく解釈）を生成する。"""
         ...
 
 

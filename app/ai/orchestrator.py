@@ -106,6 +106,23 @@ def _extract_person_name(repo: PersonRepository, text: str) -> str | None:
     return None
 
 
+def _extract_person_names_multi(repo: PersonRepository, text: str, limit: int = 2) -> list[str]:
+    """テキストから複数の氏名候補を抽出する（相性チェックの二者指定用）。
+    長い氏名から順にマッチさせ、マッチした部分をテキストから取り除きながら
+    重複や部分一致による誤検出を避ける。"""
+    names = sorted((p.name for p in repo.list_all()), key=len, reverse=True)
+    remaining = _norm_for_match(text)
+    found: list[str] = []
+    for name in names:
+        if len(found) >= limit:
+            break
+        norm_name = _norm_for_match(name)
+        if norm_name and norm_name in remaining:
+            found.append(name)
+            remaining = remaining.replace(norm_name, "", 1)
+    return found
+
+
 def _resolve_candidate_choice(repo: PersonRepository, candidate_ids: list[str], text: str):
     text = text.strip()
     if text.isdigit():
@@ -143,6 +160,7 @@ class Orchestrator:
             "awaiting_analysis_person_name": self._handle_awaiting_analysis_person_name,
             "awaiting_interview_person_name": self._handle_awaiting_interview_person_name,
             "team_recommendation_awaiting_criteria": self._handle_team_recommendation_criteria,
+            "compatibility_awaiting_names": self._handle_compatibility_awaiting_names,
         }
         if state.state_type in handlers:
             return handlers[state.state_type](line_user_id, text, state, line_event_id)
@@ -184,8 +202,11 @@ class Orchestrator:
         if _looks_like_bulk_registration(text):
             return self._start_bulk_registration(line_user_id, text)
 
-        if text in ("相性分析", "人材を比較"):
+        if text in ("人材を比較",):
             return ["この機能は第2段階で実装予定です。現在はご利用いただけません（docs/phase2-design.md）。"]
+
+        if "相性" in text:
+            return self._handle_compatibility_start(line_user_id, text)
 
         if text in ("プロジェクトメンバーを選ぶ", "メンバーを選ぶ", "メンバー選定") or (
             "メンバー" in text and any(k in text for k in ("選", "候補", "推薦", "洗い出", "探して"))
@@ -498,6 +519,47 @@ class Orchestrator:
                 self.db, self.repo, self.ai_client, line_user_id, person, question, mode
             )
         except analysis_service.AnalysisError as e:
+            return [str(e)]
+        return prepare_reply_messages(formatted)
+
+    # ---- 相性チェック ----
+    def _handle_compatibility_start(self, line_user_id: str, text: str) -> list[str]:
+        prompt = "どなたとどなたの相性を見ますか？お二人の氏名を教えてください。（例:「濱澤ひかりと佐藤太郎」）"
+        if text not in ("相性分析", "相性チェック"):
+            names = _extract_person_names_multi(self.repo, text, limit=2)
+            if len(names) >= 2:
+                person_a, _ = person_service.resolve_person_by_name(self.repo, names[0])
+                person_b, _ = person_service.resolve_person_by_name(self.repo, names[1])
+                if person_a is not None and person_b is not None:
+                    return self._run_compatibility_for_people(line_user_id, person_a, person_b)
+        conversation_service.set_state(self.db, line_user_id, "compatibility_awaiting_names", {})
+        return [prompt]
+
+    def _handle_compatibility_awaiting_names(self, line_user_id, text, state, line_event_id) -> list[str]:
+        if text in ("中止", "中止する", "やめる"):
+            conversation_service.clear_state(self.db, line_user_id)
+            return ["中止しました。"]
+        names = _extract_person_names_multi(self.repo, text, limit=2)
+        if len(names) < 2:
+            return ["お二人の氏名を認識できませんでした。フルネームで、お二人分の氏名を含めて送ってください。"]
+        person_a, _ = person_service.resolve_person_by_name(self.repo, names[0])
+        person_b, _ = person_service.resolve_person_by_name(self.repo, names[1])
+        if person_a is None or person_b is None:
+            return [
+                f"「{names[0]}」「{names[1]}」のいずれかが同姓同名で複数存在するか、"
+                "見つかりませんでした。フルネームでもう一度お試しください。"
+            ]
+        conversation_service.clear_state(self.db, line_user_id)
+        return self._run_compatibility_for_people(line_user_id, person_a, person_b)
+
+    def _run_compatibility_for_people(self, line_user_id: str, person_a, person_b) -> list[str]:
+        from app.services import compatibility_service
+
+        try:
+            formatted = compatibility_service.run_compatibility_analysis(
+                self.db, self.repo, self.ai_client, line_user_id, person_a, person_b
+            )
+        except compatibility_service.CompatibilityError as e:
             return [str(e)]
         return prepare_reply_messages(formatted)
 

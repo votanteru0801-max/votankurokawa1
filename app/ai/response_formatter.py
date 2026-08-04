@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from app.ai.output_schemas import (
+    CompatibilityAnalysisResponse,
     DetailedAnalysisResponse,
     LabeledPoint,
     SimpleAnalysisResponse,
@@ -40,6 +41,10 @@ def format_detailed_analysis(resp: DetailedAnalysisResponse) -> str:
         parts.append(f"■強み\n{_points(resp.strengths)}")
     if resp.weaknesses:
         parts.append(f"■弱み・注意点\n{_points(resp.weaknesses)}")
+    if resp.growth_guidance:
+        parts.append(f"■伸ばし方・伸び方\n{_points(resp.growth_guidance)}")
+    if resp.risk_notes:
+        parts.append(f"■注意すべきミス・すれ違いリスク\n{_points(resp.risk_notes)}")
     if resp.suitable_roles:
         parts.append(f"■向いている役割\n{_points(resp.suitable_roles)}")
     if resp.current_major_luck:
@@ -72,4 +77,19 @@ def format_team_recommendation(resp: TeamRecommendationResponse) -> str:
         parts.append("■推薦候補\n条件に合う候補が見つかりませんでした。")
     if resp.caveats:
         parts.append("■注意事項\n" + "\n".join(f"・{c}" for c in resp.caveats))
+    return "\n\n".join(parts)
+
+
+def format_compatibility_analysis(resp: CompatibilityAnalysisResponse) -> str:
+    parts = [f"■{resp.person_a_name}さん × {resp.person_b_name}さん の相性\n{resp.conclusion}"]
+    if resp.fortune_basis:
+        parts.append("■命式による判断根拠\n" + "\n".join(f"・【登録されている事実】{b}" for b in resp.fortune_basis))
+    if resp.good_points:
+        parts.append(f"■相性の良い点\n{_points(resp.good_points)}")
+    if resp.friction_points:
+        parts.append(f"■注意したいすれ違いポイント\n{_points(resp.friction_points)}")
+    if resp.communication_tips:
+        parts.append(f"■関わり方・伝え方のコツ\n{_points(resp.communication_tips)}")
+    if resp.accuracy_notes:
+        parts.append("■精度に関する注意\n" + "\n".join(f"・{n}" for n in resp.accuracy_notes))
     return "\n\n".join(parts)

@@ -6,6 +6,7 @@ LINE分割送信）を検証できるようにする。命式データは本物�
 from __future__ import annotations
 
 from app.ai.output_schemas import (
+    CompatibilityAnalysisResponse,
     DetailedAnalysisResponse,
     Label,
     LabeledPoint,
@@ -85,6 +86,12 @@ class MockAIClient:
             weaknesses=[
                 LabeledPoint(label=Label.AI_HYPOTHESIS, text="モック応答のため弱み分析は簡略化されています。")
             ],
+            growth_guidance=[
+                LabeledPoint(label=Label.AI_HYPOTHESIS, text="モック応答のため伸ばし方の提案は簡略化されています。")
+            ],
+            risk_notes=[
+                LabeledPoint(label=Label.AI_HYPOTHESIS, text="モック応答のためミス傾向・すれ違いリスクの分析は簡略化されています。")
+            ],
             suitable_roles=[LabeledPoint(label=Label.AI_HYPOTHESIS, text="実運用でより具体的な役割提案が生成されます。")],
             current_major_luck=str(calculation_data.get("luck_cycles", {}).get("direction", "")),
             current_annual_luck="",
@@ -112,4 +119,36 @@ class MockAIClient:
                 for c in picked
             ],
             caveats=["これはモック応答です。占術だけで採用・配置を決定せず、本人の意向や実績も必ず確認してください。"],
+        )
+
+    def generate_compatibility(
+        self,
+        person_a_name: str,
+        person_a_id: str,
+        data_a: dict,
+        person_b_name: str,
+        person_b_id: str,
+        data_b: dict,
+        accuracy_notes: list[str],
+    ) -> CompatibilityAnalysisResponse:
+        dm_a = data_a.get("shichuu_suimei", {}).get("day_master_element", "不明")
+        dm_b = data_b.get("shichuu_suimei", {}).get("day_master_element", "不明")
+        return CompatibilityAnalysisResponse(
+            person_a_id=person_a_id,
+            person_b_id=person_b_id,
+            person_a_name=person_a_name,
+            person_b_name=person_b_name,
+            conclusion=f"{person_a_name}さんと{person_b_name}さんの相性についての簡易モック応答です。",
+            fortune_basis=[f"{person_a_name}さんの日干の五行: {dm_a}", f"{person_b_name}さんの日干の五行: {dm_b}"],
+            good_points=[
+                LabeledPoint(
+                    label=Label.FORTUNE_TRAIT,
+                    text=f"日干の五行が{dm_a}と{dm_b}であることから、一定の関係性の傾向がうかがえます。",
+                ),
+            ],
+            friction_points=[],
+            communication_tips=[
+                LabeledPoint(label=Label.PROPOSAL, text="これはモック応答です。実際の様子や本人同士の相性も必ず確認してください。")
+            ],
+            accuracy_notes=accuracy_notes,
         )

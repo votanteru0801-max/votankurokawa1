@@ -151,3 +151,36 @@ def build_person_fortune(person: Person, target: date | None = None) -> dict:
         "support_periods": support_periods,
         "caveat": CAVEAT,
     }
+
+
+def kubou_months_for_person(person: Person, target: date | None = None) -> list[str]:
+    """今年・来年（計2年分）のうち、天中殺（空亡）にあたる月のラベル一覧を返す
+    （例:["2026年9月", "2026年10月", "2027年9月", "2027年10月"]）。
+
+    AI分析（app/services/analysis_service.py）が「空亡」に言及する際、
+    地支名だけの抽象的な説明ではなく実際の年月を使えるようにするための補助データ。
+    生年月日が未登録の場合は ToolValidationError を送出する
+    （呼び出し元は必要に応じて握りつぶして空リスト扱いにしてよい）。
+    """
+    target = target or date.today()
+    birth = _birth_input_from_person(person)
+
+    result = run_full_calculation(
+        birth,
+        DEFAULT_POLICY,
+        annual_start_year=target.year,
+        annual_count=YEARS_AHEAD,
+        monthly_target=date(target.year, target.month, 1),
+    )
+    kubou_branches = set(result.sanmeigaku.tenchuusatsu)
+
+    months: list[str] = []
+    for year in range(target.year, target.year + YEARS_AHEAD):
+        for m in range(1, 13):
+            try:
+                entry = calculate_monthly_cycle(result.shichuu_suimei, DEFAULT_POLICY, date(year, m, 1))
+            except Exception:
+                continue
+            if entry.branch in kubou_branches:
+                months.append(entry.label)
+    return months
